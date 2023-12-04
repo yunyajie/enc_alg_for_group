@@ -26,11 +26,11 @@ mpz_class CRT(const std::vector<mpz_class>& remainders, const std::vector<mpz_cl
 }
 
 //获取一个随机的解密密钥 其值 < upperLimit，满足条件是 e = 2 * r + 1，即一个奇数，且小于其对应的模数
-mpz_class get_enckey(const mpz_class& modulus, const mpz_class& upperLimit){
+mpz_class get_enckey(const mpz_class& modulus){
     gmp_randstate_t state;
     //初始化 GMP 伪随机数生成器状态
     gmp_randinit_default(state);
-    mpz_class upper = upperLimit - 1;
+    mpz_class upper = modulus - 1;
     mpz_class randomNum;
     //生成小于上限的随机数
     while(true){
@@ -48,8 +48,8 @@ mpz_class get_deckey(const mpz_class& enc_key, const mpz_class& modulus){
     return dec_key;
 }
 
-//获取主加密密钥
-mpz_class get_master_key(const std::vector<mpz_class>& enc_keys, const std::vector<mpz_class>& modulus){
+//系统初始化时获取主加密密钥
+mpz_class get_master_key_init(const std::vector<mpz_class>& enc_keys, const std::vector<mpz_class>& modulus){
     int n = modulus.size();
     mpz_class m(1);
     for(int i = 0; i < n; i++){
@@ -67,6 +67,32 @@ mpz_class get_master_key(const std::vector<mpz_class>& enc_keys, const std::vect
     }
     m_key %= m;
     return m_key;
+}
+
+//初始化时获取主加密密钥   开放给外部的接口
+mpz_class PH_MK_INIT(const std::vector<mpz_class>& enc_keys, const std::vector<mpz_class>& modulus){
+    return get_master_key_init(enc_keys, modulus);
+}
+
+//成员变化后主加密密钥更新 flag = 1 表示成员增加   flag = 0 表示成员减少
+void get_new_mk(mpz_class& m_key, const int flag, const std::vector<mpz_class>& chg_enc_keys, const std::vector<mpz_class>& chg_modulus, const mpz_class& parti_mul_product){
+    if(chg_enc_keys.empty()) return;
+    mpz_class temp(0);
+    for(int i = 0; i < chg_enc_keys.size(); i++){
+        temp += chg_enc_keys[i] * chg_modulus[i];
+    }
+    if(flag == 1){
+        //成员加入
+        m_key = (m_key + temp) % parti_mul_product;
+    }else{
+        //成员离开
+        m_key = (m_key - temp) % parti_mul_product;
+    }
+}
+
+//成员变化后主加密密钥更新 开放给外部的接口
+void PH_MK_UPDATE(mpz_class& m_key, const int flag, const std::vector<mpz_class>& chg_enc_keys, const std::vector<mpz_class>& chg_modulus, const mpz_class& parti_mul_product){
+    get_new_mk(m_key, flag, chg_enc_keys, chg_modulus, parti_mul_product);
 }
 
 //PH加密
@@ -102,12 +128,24 @@ void generate_safe_prime(mpz_class& safe_prime, const unsigned long int bit_leng
     gmp_randinit_default(state);
     //首先生成一个 bit_length 位的随机奇数
     mpz_urandomb(prime_candidate.get_mpz_t(), state, bit_length);
-    mpz_setbit(prime_candidate.get_mpz_t(), bit_length - 1); //确保是一个 bit_length 位长的数
+    mpz_setbit(prime_candidate.get_mpz_t(), bit_length - 2); //确保是一个 bit_length - 1 位长的数
     mpz_setbit(prime_candidate.get_mpz_t(), 0); //确保是一个奇数
+    while(true){
+        mpz_nextprime(safe_prime.get_mpz_t(), prime_candidate.get_mpz_t());
+        //std::cout << "待选素数：" << safe_prime << std::endl;
+        if(is_prime((safe_prime - 1) / 2, reps)) return;
+        prime_candidate = safe_prime;
+    }
+    
+}
 
-    std::cout << "这个随机的奇数是：" << prime_candidate << std::endl;
-    while(!is_prime(prime_candidate, reps) || !is_prime((prime_candidate - 1) / 2, reps)){
-        //不是素数就试探下一个奇数
-        mpz_add_ui(prime_candidate.get_mpz_t(), prime_candidate.get_mpz_t(), 2);
+//生成一个大于 lowerLimit 的安全素数
+void generate_safe_prime(mpz_class& safe_prime, const mpz_class& lowerLimit, const unsigned long int reps){
+    mpz_class prime_candidate = lowerLimit;
+    while(true){
+        mpz_nextprime(safe_prime.get_mpz_t(), prime_candidate.get_mpz_t());
+        //std::cout << "待选素数：" << safe_prime << std::endl;
+        if(is_prime((safe_prime - 1) / 2, reps)) return;
+        prime_candidate = safe_prime;
     }
 }
