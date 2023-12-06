@@ -114,12 +114,6 @@ mpz_class PH_DEC(const mpz_class& ciphertext, const mpz_class& private_key, cons
     return message;
 }
 
-//素性测试 reps 是 Miller_Rabin 素性测试的重复次数
-bool is_prime(const mpz_class& num, const unsigned long int reps){
-    //使用 Miller_Rabin 素性测试进行检查
-    return mpz_probab_prime_p(num.get_mpz_t(), reps);
-}
-
 //生成一个长度为 bit_length 的安全素数
 void generate_safe_prime(mpz_class& safe_prime, const unsigned long int bit_length, const unsigned long int reps){
     mpz_class prime_candidate;
@@ -133,7 +127,7 @@ void generate_safe_prime(mpz_class& safe_prime, const unsigned long int bit_leng
     while(true){
         mpz_nextprime(safe_prime.get_mpz_t(), prime_candidate.get_mpz_t());
         //std::cout << "待选素数：" << safe_prime << std::endl;
-        if(is_prime((safe_prime - 1) / 2, reps)) return;
+        if(mpz_probab_prime_p(static_cast<mpz_class>((safe_prime - 1) / 2).get_mpz_t(), reps) == 2) return;
         prime_candidate = safe_prime;
     }
     
@@ -145,7 +139,7 @@ void generate_safe_prime(mpz_class& safe_prime, const mpz_class& lowerLimit, con
     while(true){
         mpz_nextprime(safe_prime.get_mpz_t(), prime_candidate.get_mpz_t());
         //std::cout << "待选素数：" << safe_prime << std::endl;
-        if(is_prime((safe_prime - 1) / 2, reps)) return;
+        if(mpz_probab_prime_p(static_cast<mpz_class>((safe_prime - 1) / 2).get_mpz_t(), reps) == 2) return;
         prime_candidate = safe_prime;
     }
 }
