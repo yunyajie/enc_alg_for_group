@@ -85,20 +85,19 @@ void PH_Cipher::sys_init(){
 
     //初始化 mod_product 和 lcm
     this->mod_product = 1;
-    this->lcm = 1;
+    this->lcm_half = 1;
     for(auto ele : this->members){
-        this->lcm *= static_cast<mpz_class>((ele.get_modulus() - 1) / 2);
+        this->lcm_half *= static_cast<mpz_class>((ele.get_modulus() - 1) / 2);
         this->mod_product *= ele.get_modulus();
     }
-    this->lcm *= 2;
 
     //初始化 x 和 y
     this->x.clear();
     this->y.clear();
     mpz_class tem_x, tem_y;
     for(auto ele : this->members){
-        tem_x = this->lcm / static_cast<mpz_class>(ele.get_modulus() - 1);
-        mpz_invert(tem_y.get_mpz_t(), tem_x.get_mpz_t(), static_cast<mpz_class>(ele.get_modulus() - 1).get_mpz_t());
+        tem_x = this->lcm_half / static_cast<mpz_class>((ele.get_modulus() - 1) / 2);
+        mpz_invert(tem_y.get_mpz_t(), tem_x.get_mpz_t(), static_cast<mpz_class>((ele.get_modulus() - 1) / 2).get_mpz_t());
         this->x.push_back(tem_x);
         this->y.push_back(tem_y);
     }
@@ -166,11 +165,10 @@ void PH_Cipher::master_key_init(){
     for(int i = 0; i < this->members.size(); i++){
         this->m_key += this->members[i].get_enc_key() * x[i] * y[i];
     }
-    this->m_key %= this->lcm;
+    this->m_key %= this->lcm_half;
 
-    //这一块儿是为什么呢   很重要
     //需要满足 m_key % 2 == 1
-    while((this->m_key & 1) == 0) this->m_key += (this->lcm / 2);
+    while((this->m_key & 1) == 0) this->m_key += (this->lcm_half / 2);
 
     //std::cout << "master_key = " << this->m_key << std::endl;
 }

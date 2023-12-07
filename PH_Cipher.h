@@ -45,7 +45,7 @@ class PH_Cipher{
         std::vector<mpz_class> x;           // lcm / m_i
         std::vector<mpz_class> y;           // x_i 模 m_i 的逆
         mpz_class mod_product;              //系统所有成员的模数乘积
-        mpz_class lcm;                      // 所有 m_i 的最小公倍数
+        mpz_class lcm_half;                      // 所有 m_i 的其中素数的乘积
         int available;         //标记下一个待分配成员位置
         std::vector<PH_Member> active_members; //活跃成员
         mpz_class m_key;                    //主加密密钥
