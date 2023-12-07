@@ -63,7 +63,7 @@ int PH_Cipher::member_leave(const PH_Member leaver){
 //系统扩展为原来的两倍
 int PH_Cipher::sys_entend(){
     std::vector<PH_Member> newmembers = init_members(m);
-
+    return 0;
 }
 
 PH_Cipher::~PH_Cipher(){}
@@ -76,109 +76,120 @@ void PH_Cipher::sys_init(){
     gmp_randstate_t state;
     gmp_randinit_default(state);    //初始化 GMP 伪随机数生成器状态
     mpz_urandomb(modulus_lower_bound.get_mpz_t(), state, bit_length);   //首先生成一个 bit_length 位的随机奇数
-    mpz_setbit(modulus_lower_bound.get_mpz_t(), bit_length - 2); //确保是一个 bit_length - 1 位长的数
+    mpz_setbit(modulus_lower_bound.get_mpz_t(), bit_length - 1); //确保是一个 bit_length 位长的数
     mpz_setbit(modulus_lower_bound.get_mpz_t(), 0); //确保是一个奇数
 
     //初始化 m 个成员
-    members = init_members(m);
+    this->members.clear();
+    this->members = init_members(m);
 
     //初始化 mod_product 和 lcm
-    mod_product = 1;
-    lcm = 1;
-    for(int i = 0; i < m; i++){
-        lcm *= (members[i].get_modulus() - 1) / 2;
-        mod_product *= members[i].get_modulus();
+    this->mod_product = 1;
+    this->lcm = 1;
+    for(auto ele : this->members){
+        this->lcm *= static_cast<mpz_class>((ele.get_modulus() - 1) / 2);
+        this->mod_product *= ele.get_modulus();
     }
-    lcm *= 2;
-    
+    this->lcm *= 2;
+
     //初始化 x 和 y
+    this->x.clear();
+    this->y.clear();
     mpz_class tem_x, tem_y;
-    for(int i = 0; i < m; i++){
-        tem_x = lcm / (members[i].get_modulus() - 1);
-        mpz_invert(tem_y.get_mpz_t(), tem_x.get_mpz_t(), static_cast<mpz_class>(members[i].get_modulus() - 1).get_mpz_t());
-        x.push_back(tem_x);
-        y.push_back(tem_y);
+    for(auto ele : this->members){
+        tem_x = this->lcm / static_cast<mpz_class>(ele.get_modulus() - 1);
+        mpz_invert(tem_y.get_mpz_t(), tem_x.get_mpz_t(), static_cast<mpz_class>(ele.get_modulus() - 1).get_mpz_t());
+        this->x.push_back(tem_x);
+        this->y.push_back(tem_y);
     }
 
     //初始化 available
-    available = 0;
+    this->available = 0;
 
     //初始化 m_key
     master_key_init();
 
     //初始化 active_mod_product
-    active_mod_product = 1;  //未有成员注册并加入活跃组
+    this->active_mod_product = 1;  //未有成员注册并加入活跃组
 
 }
 
 //生成一个大于 lowerLimit 的安全素数
 void PH_Cipher::generate_safe_prime(mpz_class& safe_prime, const unsigned long int reps){
-    mpz_class prime_candidate = modulus_lower_bound;
+    mpz_class prime_candidate = this->modulus_lower_bound;
     while(true){
         mpz_nextprime(safe_prime.get_mpz_t(), prime_candidate.get_mpz_t());
-        //std::cout << "待选素数：" << safe_prime << std::endl;
         if(mpz_probab_prime_p(static_cast<mpz_class>((safe_prime - 1) / 2).get_mpz_t(), reps) == 2){
             //更新安全素数下界
-            modulus_lower_bound = safe_prime;
+            this->modulus_lower_bound = safe_prime;
             return;
         }
-        prime_candidate = safe_prime;
+        prime_candidate = safe_prime + 1;
     }
 }
 
 //获取一个随机的解密密钥 其值 < upperLimit，满足条件是 e = 2 * r + 1，即一个奇数，且小于其对应的模数
 mpz_class get_enckey(const mpz_class& modulus){
+    // 使用当前时间的微秒级别信息作为种子
+    auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     gmp_randstate_t state;
     //初始化 GMP 伪随机数生成器状态
     gmp_randinit_default(state);
+    gmp_randseed_ui(state, static_cast<unsigned long>(seed));
     mpz_class upper = modulus - 1;
     mpz_class randomNum;
     //生成小于上限的随机数
-    while(true){
-        mpz_urandomm(randomNum.get_mpz_t(), state, upper.get_mpz_t());
-        if(randomNum % 2 != 0 && randomNum != 1){
-            return randomNum;
-        }
-    }
+    mpz_urandomm(randomNum.get_mpz_t(), state, upper.get_mpz_t());
+    //将随机数置为奇数
+    randomNum |= 1;
+    //清理状态
+    gmp_randclear(state);
+    return randomNum;
 }
 
 
 std::vector<PH_Member> PH_Cipher::init_members(int n){
-    std::vector<PH_Member> members;
+    std::vector<PH_Member> new_members;
     mpz_class mod;
-    mpz_class dec_key;
     mpz_class enc_key;
     for(int i = 0; i < n; i++){
-        generate_safe_prime(mod, 25);
+        generate_safe_prime(mod, 50);
         enc_key = get_enckey(mod);
-        members.emplace_back(enc_key, mod);
+        new_members.emplace_back(enc_key, mod);
     }
-    return members;
+    return new_members;
 }
 
 //系统初始化后初始化 m_key
 void PH_Cipher::master_key_init(){
-    m_key = 0;
-    for(int i = 0; i < m; i++){
-        m_key += members[i].get_enc_key() * x[i] * y[i];
+    this->m_key = 0;
+    for(int i = 0; i < this->members.size(); i++){
+        this->m_key += this->members[i].get_enc_key() * x[i] * y[i];
     }
-    m_key %= lcm;
+    this->m_key %= this->lcm;
+
+    //这一块儿是为什么呢   很重要
+    //需要满足 m_key % 2 == 1
+    while((this->m_key & 1) == 0) this->m_key += (this->lcm / 2);
+
+    //std::cout << "master_key = " << this->m_key << std::endl;
 }
 
 
 //测试用   此时假设所有成员都是活跃成员
 void PH_Cipher::test(){
-    active_mod_product = mod_product;
-    std::vector<int> messages = {111111, 12356787, 82138, 99918, 111234, 90008, 112344};
+    this->active_mod_product = this->mod_product;
+    std::vector<int> messages = {111234567, 12123453, 8123452, 912989, 111231, 93330, 11134512};
     int n = messages.size();
     std::cout << "*****************************加密消息测试*****************************" << std::endl;
+    mpz_class c;
     for(int i = 0; i < n; i++){
         std::cout << "***********************************************************************" <<std::endl;
-        std::cout << "消息" << i << ": " << messages[i] << "     加密后密文：c = " << encrypt(messages[i]) << std::endl;
+        std::cout << "消息" << i << ": " << messages[i] << "     加密后密文：c = " << (c = encrypt(messages[i])) << std::endl;
         std::cout << "解密情况如下：" << std::endl;
         for(int j = 0; j < m; j++){
-            std::cout << "成员 " << j << " : 密钥为 (" << members[j].get_dec_key() << "," << members[j].get_modulus() << ")   " 
-            << "解密的消息为：" << members[j].decrypt(messages[i]) << std::endl;
+            std::cout << "成员 " << j << " : 密钥为 (" << this->members[j].get_dec_key() << "," << this->members[j].get_modulus() << ")   " 
+            << "解密的消息为：" << this->members[j].decrypt(c) << std::endl;
         }
     }
 }
