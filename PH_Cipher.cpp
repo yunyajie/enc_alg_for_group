@@ -184,11 +184,20 @@ void PH_Cipher::master_key_init(){
     this->m_key %= this->lcm;
 
     /*
-    设 mod_i = 2 * p_i + 1,
-    则
-    m_key % p_i = e_i,
-    又 m_key % 2 = 1, e_i % 2 = 1,  e_i < 2 * p_i
-    有 m_key % (2 * p_i) = e_i
+    e_i = 2 * r_i + 1 是一个奇数
+    设 mod_i = 2 * p_i + 1, 下面的代码保证 m_key mod 2 = 1，是一个奇数
+    则整理所有条件有： 
+    m_key mod 2 = 1                (1)  
+    m_key mod p_i = e_i mod p_i    (2)
+    于是有：
+    由 (2) m_key = k * p_i + e_i
+    由 m_key 和 p_i 都是奇数， k * p_i 是偶数，又有 p_i 是素数，k 是偶数，于是 (k * p_i) mod (2 * p_i) = 0
+    结论：
+    m_key mod (2 * p_i) 
+    = (k * p_i + e_i) mod (2 * p_i) 
+    = (k * p_i) mod (2 * p_i) + e_i mod (2 * p_i) 
+    = e_i mod (2 * p_i) 
+    = e_i
     */
     //需要满足 m_key % 2 == 1
     if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % (this->lcm);
