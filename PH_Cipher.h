@@ -10,9 +10,9 @@ class PH_Member{
     public:
         PH_Member(mpz_class enc_key, mpz_class modulus);
         mpz_class decrypt(const mpz_class& ciphertext);    //解密
-        mpz_class get_enc_key();
-        mpz_class get_dec_key();
-        mpz_class get_modulus();
+        mpz_class get_enc_key() const;
+        mpz_class get_dec_key() const;
+        mpz_class get_modulus() const;
         ~PH_Member();
     private:
         mpz_class enc_key;                  //成员的加密密钥
@@ -26,8 +26,8 @@ class PH_Cipher{
         void init();                                       //系统初始化
         int allocation(PH_Member& new_register);           //新成员注册
         mpz_class encrypt(const mpz_class& message);       //加密
-        int member_join(const PH_Member joiner);           //成员加入
-        int member_leave(const PH_Member leaver);          //成员离开
+        int member_join(const PH_Member& joiner);           //成员加入
+        int member_leave(const PH_Member& leaver);          //成员离开
         int sys_entend();                                  //备用密钥分配完毕，系统需要扩展，计划扩展为原来规模的2倍
 
         void test();  //解密测试
@@ -45,11 +45,12 @@ class PH_Cipher{
         std::vector<mpz_class> x;           // lcm / m_i
         std::vector<mpz_class> y;           // x_i 模 m_i 的逆
         mpz_class mod_product;              //系统所有成员的模数乘积
-        mpz_class lcm_half;                      // 所有 m_i 的其中素数的乘积
+        mpz_class lcm;                      // 所有 m_i 的最小公倍数
         int available;         //标记下一个待分配成员位置
         std::vector<PH_Member> active_members; //活跃成员
         mpz_class m_key;                    //主加密密钥
         mpz_class active_mod_product;       //所有活跃成员的模数乘积
+        mpz_class active_lcm;               //所有活跃成员 m_i 的最小公倍数
 
         mpz_class modulus_lower_bound;              //生成模数时的下界
 };
