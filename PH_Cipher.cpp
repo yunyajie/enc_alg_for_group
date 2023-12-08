@@ -165,10 +165,17 @@ void PH_Cipher::master_key_init(){
     for(int i = 0; i < this->members.size(); i++){
         this->m_key += this->members[i].get_enc_key() * x[i] * y[i];
     }
-    this->m_key %= this->lcm_half;
+    this->m_key %= this->lcm_half * 2;
 
+    /*
+    设 mod_i = 2 * p_i + 1,
+    则
+    m_key % p_i = e_i,
+    又 m_key % 2 = 1, e_i % 2 = 1,  e_i < 2 * p_i
+    有 m_key % (2 * p_i) = e_i
+    */
     //需要满足 m_key % 2 == 1
-    while((this->m_key & 1) == 0) this->m_key += (this->lcm_half / 2);
+    if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm_half) % (this->lcm_half * 2);
 
     //std::cout << "master_key = " << this->m_key << std::endl;
 }
