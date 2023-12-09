@@ -1,6 +1,9 @@
 #include "PH_Cipher.h"
 
 //PH_Member 的实现
+PH_Member::PH_Member(){
+    //空构造
+}
 
 PH_Member::PH_Member(mpz_class enc_key, mpz_class modulus):enc_key(enc_key), modulus(modulus){
     //初始化解密密钥
@@ -44,11 +47,11 @@ void PH_Cipher::init(){
 
 //新成员注册，系统分配可用密钥
 int PH_Cipher::allocation(PH_Member& new_register){
-    if(this->available < m){ //还有可用的密钥
-        new_register = this->members[available];
-    }else{ //available  == m 密钥分配完毕，需要扩展系统
+    if(this->available < this->m){ //还有可用的密钥
+        new_register = this->members[this->available];
+    }else{ //available == m 密钥分配完毕，需要扩展系统
         sys_entend();
-        new_register = this->members[available];
+        new_register = this->members[this->available];
     }
     this->available++;
 }
@@ -63,11 +66,29 @@ mpz_class PH_Cipher::encrypt(const mpz_class& message){
 int PH_Cipher::member_join(const PH_Member& joiner){
     this->active_mod_product *= joiner.get_modulus();
     this->active_lcm *= (joiner.get_modulus() - 1) / 2;
+    //更新 active_members_index
+    int index = this->mod_map[joiner.get_modulus()];
+    std::cout << "index = " << index << std::endl;
+    this->active_members_index.push_back(index);
+    //更新主加密密钥
+    this->m_key += this->members[index].get_enc_key() * this->x[index] * this->y[index];
+    this->m_key %= this->lcm;
+    if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
+    std::cout << "主密钥更新  master_key = " << this->m_key << std::endl;
     return 0;
 }
 
 int PH_Cipher::member_leave(const PH_Member& leaver){
-    
+    this->active_mod_product /= leaver.get_modulus();
+    this->active_lcm /= (leaver.get_modulus() - 1) / 2;
+    //更新 active_members_index
+    int index = this->mod_map[leaver.get_modulus()];
+    this->active_members_index.erase(std::remove(this->active_members_index.begin(), this->active_members_index.end(), index));
+    //更新主加密密钥
+    this->m_key -= this->members[index].get_enc_key() * this->x[index] * this->y[index];
+    this->m_key %= this->lcm;
+    if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
+    std::cout << "主密钥更新  master_key = " << this->m_key << std::endl;
     return 0;
 }
 
@@ -75,13 +96,52 @@ int PH_Cipher::member_leave(const PH_Member& leaver){
 
 //系统扩展为原来的两倍
 int PH_Cipher::sys_entend(){
-    std::vector<PH_Member> newmembers = init_members(m);
+    std::cout << ">>>>>>>>>>>>>>>>>>>>>>系统拓展<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+    std::vector<PH_Member> newmembers = init_members(this->m);
+    //将新的密钥加入到已有密钥的尾部
+    this->members.insert(this->members.end(), newmembers.begin(), newmembers.end());
+    //更新 mod_map
+    int cnt = this->m;
+    for(PH_Member ele : newmembers){
+        mod_map[ele.get_modulus()] = cnt++;
+    }
+    //更新 m
+    this->m *= 2;
+    //初始化 mod_product 和 lcm
+    init_lcm_modproduct();
+    //初始化 x 和 y
+    init_xy();
+    //初始化 m_key
+    master_key_init();
     return 0;
 }
 
 PH_Cipher::~PH_Cipher(){}
 
+//初始化 x 和 y
+void PH_Cipher::init_xy(){
+    this->x.clear();
+    this->y.clear();
+    mpz_class tem_x, tem_y;
+    mpz_class lcm_half = this->lcm / 2;
+    for(auto ele : this->members){
+        tem_x = lcm_half / static_cast<mpz_class>((ele.get_modulus() - 1) / 2);
+        mpz_invert(tem_y.get_mpz_t(), tem_x.get_mpz_t(), static_cast<mpz_class>((ele.get_modulus() - 1) / 2).get_mpz_t());
+        this->x.push_back(tem_x);
+        this->y.push_back(tem_y);
+    }
+}
 
+//初始化 lcm 和 mod_product
+void PH_Cipher::init_lcm_modproduct(){
+    this->mod_product = 1;
+    this->lcm = 1;
+    for(auto ele : this->members){
+        this->lcm *= static_cast<mpz_class>((ele.get_modulus() - 1) / 2);
+        this->mod_product *= ele.get_modulus();
+    }
+    this->lcm *= 2;
+}
 
 //系统初始化
 void PH_Cipher::sys_init(){
@@ -95,30 +155,37 @@ void PH_Cipher::sys_init(){
     //初始化 m 个成员
     this->members.clear();
     this->members = init_members(m);
+    int cnt = 0;
+    //初始化 mod_map
+    for(PH_Member ele : this->members){
+        this->mod_map[ele.get_modulus()] = cnt++;
+    }
 
     //初始化 mod_product 和 lcm
-    this->mod_product = 1;
-    this->lcm = 1;
-    for(auto ele : this->members){
-        this->lcm *= static_cast<mpz_class>((ele.get_modulus() - 1) / 2);
-        this->mod_product *= ele.get_modulus();
-    }
-    this->lcm *= 2;
+    // this->mod_product = 1;
+    // this->lcm = 1;
+    // for(auto ele : this->members){
+    //     this->lcm *= static_cast<mpz_class>((ele.get_modulus() - 1) / 2);
+    //     this->mod_product *= ele.get_modulus();
+    // }
+    // this->lcm *= 2;
+    init_lcm_modproduct();
 
     //初始化 x 和 y
-    this->x.clear();
-    this->y.clear();
-    mpz_class tem_x, tem_y;
-    mpz_class lcm_half = this->lcm / 2;
-    for(auto ele : this->members){
-        tem_x = lcm_half / static_cast<mpz_class>((ele.get_modulus() - 1) / 2);
-        mpz_invert(tem_y.get_mpz_t(), tem_x.get_mpz_t(), static_cast<mpz_class>((ele.get_modulus() - 1) / 2).get_mpz_t());
-        this->x.push_back(tem_x);
-        this->y.push_back(tem_y);
-    }
+    // this->x.clear();
+    // this->y.clear();
+    // mpz_class tem_x, tem_y;
+    // mpz_class lcm_half = this->lcm / 2;
+    // for(auto ele : this->members){
+    //     tem_x = lcm_half / static_cast<mpz_class>((ele.get_modulus() - 1) / 2);
+    //     mpz_invert(tem_y.get_mpz_t(), tem_x.get_mpz_t(), static_cast<mpz_class>((ele.get_modulus() - 1) / 2).get_mpz_t());
+    //     this->x.push_back(tem_x);
+    //     this->y.push_back(tem_y);
+    // }
+    init_xy();
 
-    //初始化 available 从下标为 1 的位置开始分配，将 m_key 初始化为第一个 e_i * x_i * y_i
-    this->available = 1;
+    //初始化 available 从下标为 0 的位置开始分配
+    this->available = 0;
 
     //初始化 m_key
     master_key_init();
@@ -177,9 +244,11 @@ std::vector<PH_Member> PH_Cipher::init_members(int n){
 
 //系统初始化后初始化 m_key
 void PH_Cipher::master_key_init(){
+    //根据 active_members 中的活跃成员初始化 m_key
     this->m_key = 0;
-    for(int i = 0; i < this->members.size(); i++){
-        this->m_key += this->members[i].get_enc_key() * x[i] * y[i];
+    if(this->active_members_index.empty()) return;
+    for(int ele : this->active_members_index){
+        this->m_key += this->members[ele].get_enc_key() * this->x[ele] * this->y[ele];
     }
     this->m_key %= this->lcm;
 
@@ -202,14 +271,18 @@ void PH_Cipher::master_key_init(){
     //需要满足 m_key % 2 == 1
     if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % (this->lcm);
 
-    //std::cout << "master_key = " << this->m_key << std::endl;
+    std::cout << "主密钥更新  master_key = " << this->m_key << std::endl;
+    // for(int i = 0; i < this->members.size(); i++){
+    //     std::cout << "u_" << i << " : x = " << (members[i].get_modulus() - 1) / 2 << "   e = " << members[i].get_enc_key() << "   m_key mod (2 * x) = " << m_key % (2 * ((members[i].get_modulus() - 1) / 2)) << std::endl;
+    // }
 }
 
 
 //测试用   此时假设所有成员都是活跃成员
 void PH_Cipher::test(){
-    this->active_mod_product = this->mod_product;
+    
     std::vector<int> messages = {111234567, 12123453, 8123452, 912989, 111231, 93330, 11134512};
+
     int n = messages.size();
     std::cout << "*****************************加密消息测试*****************************" << std::endl;
     mpz_class c;
