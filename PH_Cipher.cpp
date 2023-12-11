@@ -54,6 +54,7 @@ int PH_Cipher::allocation(PH_Member& new_register){
         new_register = this->members[this->available];
     }
     this->available++;
+    return 0;
 }
 
 
@@ -64,11 +65,20 @@ mpz_class PH_Cipher::encrypt(const mpz_class& message){
 }
 
 int PH_Cipher::member_join(const PH_Member& joiner){
+    if(this->mod_map.find(joiner.get_modulus()) == this->mod_map.end()) return -1;
+    //首先获取 leaver 在 系统成员列表中的下标
+    int index = this->mod_map[joiner.get_modulus()];
+    //首先判断这个成员是否在活跃组中
+    if(find(this->active_members_index.begin(), this->active_members_index.end(), index) != this->active_members_index.end()){
+        //在活跃组中
+        //std::cout << "成员在活跃组中，不可重复加入！！！！" << std::endl;
+        return -1;
+    }
     this->active_mod_product *= joiner.get_modulus();
     this->active_lcm *= (joiner.get_modulus() - 1) / 2;
     //更新 active_members_index
-    int index = this->mod_map[joiner.get_modulus()];
-    std::cout << "index = " << index << std::endl;
+    
+    //std::cout << "index = " << index << std::endl;
     this->active_members_index.push_back(index);
     //更新主加密密钥
     this->m_key += this->members[index].get_enc_key() * this->x[index] * this->y[index];
@@ -79,14 +89,23 @@ int PH_Cipher::member_join(const PH_Member& joiner){
 }
 
 int PH_Cipher::member_leave(const PH_Member& leaver){
+    if(this->mod_map.find(leaver.get_modulus()) == this->mod_map.end()) return -1;
+    //首先获取 leaver 在 系统成员列表中的下标
+    int index = this->mod_map[leaver.get_modulus()];
+    //首先判断这个成员是否在活跃组中
+    if(find(this->active_members_index.begin(), this->active_members_index.end(), index) == this->active_members_index.end()){
+        //不在活跃组中
+        //std::cout << "成员不在活跃组中，无需退出！！！！" << std::endl;
+        return -1;
+    }
     this->active_mod_product /= leaver.get_modulus();
     this->active_lcm /= (leaver.get_modulus() - 1) / 2;
     //更新 active_members_index
-    int index = this->mod_map[leaver.get_modulus()];
     this->active_members_index.erase(std::remove(this->active_members_index.begin(), this->active_members_index.end(), index));
     //更新主加密密钥
     this->m_key -= this->members[index].get_enc_key() * this->x[index] * this->y[index];
-    this->m_key %= this->lcm;
+    //mpz_mod(this->m_key.get_mpz_t(), this->m_key.get_mpz_t(), this->lcm.get_mpz_t());   //保证 m_key 是正数
+    this->m_key = (this->m_key % this->lcm + this->lcm) % this->lcm;  //保证 m_key 是正数
     if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
     std::cout << "主密钥更新  master_key = " << this->m_key << std::endl;
     return 0;
@@ -96,7 +115,7 @@ int PH_Cipher::member_leave(const PH_Member& leaver){
 
 //系统扩展为原来的两倍
 int PH_Cipher::sys_entend(){
-    std::cout << ">>>>>>>>>>>>>>>>>>>>>>系统拓展<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+    std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>系统拓展<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
     std::vector<PH_Member> newmembers = init_members(this->m);
     //将新的密钥加入到已有密钥的尾部
     this->members.insert(this->members.end(), newmembers.begin(), newmembers.end());
@@ -162,13 +181,6 @@ void PH_Cipher::sys_init(){
     }
 
     //初始化 mod_product 和 lcm
-    // this->mod_product = 1;
-    // this->lcm = 1;
-    // for(auto ele : this->members){
-    //     this->lcm *= static_cast<mpz_class>((ele.get_modulus() - 1) / 2);
-    //     this->mod_product *= ele.get_modulus();
-    // }
-    // this->lcm *= 2;
     init_lcm_modproduct();
 
     //初始化 x 和 y
@@ -246,7 +258,7 @@ std::vector<PH_Member> PH_Cipher::init_members(int n){
 void PH_Cipher::master_key_init(){
     //根据 active_members 中的活跃成员初始化 m_key
     this->m_key = 0;
-    if(this->active_members_index.empty()) return;
+    if(this->active_members_index.empty()) return;  //活跃组还未有人，初始化为 0
     for(int ele : this->active_members_index){
         this->m_key += this->members[ele].get_enc_key() * this->x[ele] * this->y[ele];
     }
@@ -269,7 +281,7 @@ void PH_Cipher::master_key_init(){
     = e_i
     */
     //需要满足 m_key % 2 == 1
-    if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % (this->lcm);
+    if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
 
     std::cout << "主密钥更新  master_key = " << this->m_key << std::endl;
     // for(int i = 0; i < this->members.size(); i++){

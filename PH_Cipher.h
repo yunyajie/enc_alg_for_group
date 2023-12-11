@@ -2,6 +2,7 @@
 #define _PH_CIPHER_
 #include <iostream>
 #include <vector>
+#include <algorithm>
 #include <chrono>
 #include <unordered_map>
 #include <gmpxx.h>
