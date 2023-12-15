@@ -69,7 +69,7 @@ class PH_Cipher{
         mpz_class active_mod_product;       //所有活跃成员的模数乘积
         mpz_class active_lcm;               //所有活跃成员 m_i 的最小公倍数
 
-        mpz_class modulus_lower_bound;              //生成模数时的下界
+        mpz_class modulus_lower_bound;      //生成模数时的下界
 };
 
 #endif

@@ -111,8 +111,6 @@ int PH_Cipher::member_leave(const PH_Member& leaver){
     return 0;
 }
 
-
-
 //系统扩展为原来的两倍
 int PH_Cipher::sys_entend(){
     std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>系统拓展<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
@@ -184,16 +182,6 @@ void PH_Cipher::sys_init(){
     init_lcm_modproduct();
 
     //初始化 x 和 y
-    // this->x.clear();
-    // this->y.clear();
-    // mpz_class tem_x, tem_y;
-    // mpz_class lcm_half = this->lcm / 2;
-    // for(auto ele : this->members){
-    //     tem_x = lcm_half / static_cast<mpz_class>((ele.get_modulus() - 1) / 2);
-    //     mpz_invert(tem_y.get_mpz_t(), tem_x.get_mpz_t(), static_cast<mpz_class>((ele.get_modulus() - 1) / 2).get_mpz_t());
-    //     this->x.push_back(tem_x);
-    //     this->y.push_back(tem_y);
-    // }
     init_xy();
 
     //初始化 available 从下标为 0 的位置开始分配
@@ -241,7 +229,6 @@ mpz_class get_enckey(const mpz_class& modulus){
     return randomNum;
 }
 
-
 std::vector<PH_Member> PH_Cipher::init_members(int n){
     std::vector<PH_Member> new_members;
     mpz_class mod;
@@ -287,24 +274,4 @@ void PH_Cipher::master_key_init(){
     // for(int i = 0; i < this->members.size(); i++){
     //     std::cout << "u_" << i << " : x = " << (members[i].get_modulus() - 1) / 2 << "   e = " << members[i].get_enc_key() << "   m_key mod (2 * x) = " << m_key % (2 * ((members[i].get_modulus() - 1) / 2)) << std::endl;
     // }
-}
-
-
-//测试用   此时假设所有成员都是活跃成员
-void PH_Cipher::test(){
-    
-    std::vector<int> messages = {111234567, 12123453, 8123452, 912989, 111231, 93330, 11134512};
-
-    int n = messages.size();
-    std::cout << "*****************************加密消息测试*****************************" << std::endl;
-    mpz_class c;
-    for(int i = 0; i < n; i++){
-        std::cout << "***********************************************************************" <<std::endl;
-        std::cout << "消息" << i << ": " << messages[i] << "     加密后密文：c = " << (c = encrypt(messages[i])) << std::endl;
-        std::cout << "解密情况如下：" << std::endl;
-        for(int j = 0; j < m; j++){
-            std::cout << "成员 " << j << " : 密钥为 (" << this->members[j].get_dec_key() << "," << this->members[j].get_modulus() << ")   " 
-            << "解密的消息为：" << this->members[j].decrypt(c) << std::endl;
-        }
-    }
 }
