@@ -37,10 +37,6 @@ PH_Member::~PH_Member(){}
 //PH_Cipher 的实现
 
 PH_Cipher::PH_Cipher(int m, int bit_length):m(m), bit_length(bit_length){
-}
-
-//其他初始化的内容全部放在这里
-void PH_Cipher::init(){
     //系统初始化
     sys_init();
 }

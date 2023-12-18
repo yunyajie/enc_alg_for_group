@@ -36,7 +36,7 @@ class PH_Member{
 
 class PH_Cipher{
     public:
-        PH_Cipher(int m, int bit_length);
+        PH_Cipher(int m = 2, int bit_length = 32);
         void init();                                       //系统初始化
         int allocation(PH_Member& new_register);           //新成员注册
         mpz_class encrypt(const mpz_class& message);       //加密
