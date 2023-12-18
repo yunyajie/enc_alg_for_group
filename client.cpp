@@ -1,6 +1,6 @@
-#include "PH_Cipher.h"
+//#include "PH_Cipher.h"
 #include <vector>
-
+#include <cstring>
 #include <iostream>
 #include <cstdlib>
 #include <unistd.h>
@@ -27,7 +27,7 @@ int main() {
         close(clientSock);
         return 1;
     }
-    const char* message = "Hello, Server!";
+    const char* message = "Hello, Server!\n";
     int cnt = 0;
     std::string str;
     while(true){
@@ -38,6 +38,7 @@ int main() {
             close(clientSock);
             return 1;
         }
+        sleep(3);
     }
 
     // 关闭套接字
