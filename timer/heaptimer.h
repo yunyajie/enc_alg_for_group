@@ -24,37 +24,37 @@ struct TimerNode {
     }
 };
 class HeapTimer {
-public:
-    HeapTimer() { heap_.reserve(64); }
+    public:
+        HeapTimer() { heap_.reserve(64); }
 
-    ~HeapTimer() { clear(); }
-    
-    void adjust(int id, int newExpires);                        //调整指定id的结点
+        ~HeapTimer() { clear(); }
+        
+        void adjust(int id, int newExpires);                        //调整指定id的结点
 
-    void add(int id, int timeOut, const TimeoutCallBack& cb);   //添加新节点或修改已有节点
+        void add(int id, int timeOut, const TimeoutCallBack& cb);   //添加新节点或修改已有节点
 
-    void doWork(int id);                                        //删除指定id结点，并触发回调函数
+        void doWork(int id);                                        //删除指定id结点，并触发回调函数
 
-    void clear();
+        void clear();
 
-    void tick();                                                //清除超时结点
+        void tick();                                                //清除超时结点
 
-    void pop();                                                 //删除队首结点
+        void pop();                                                 //删除队首结点
 
-    int GetNextTick();                                          //获取据下一个超时事件发生的时间
+        int getNextTick();                                          //获取据下一个超时事件发生的时间
 
-private:
-    void del_(size_t i);                        //删除指定位置的结点
-    
-    void siftup_(size_t i);                     //向上调整
+    private:
+        void del_(size_t i);                        //删除指定位置的结点
+        
+        void siftup_(size_t i);                     //向上调整
 
-    bool siftdown_(size_t index, size_t n);     //向下调整
+        bool siftdown_(size_t index, size_t n);     //向下调整
 
-    void SwapNode_(size_t i, size_t j);         //交换节点
+        void SwapNode_(size_t i, size_t j);         //交换节点
 
-    std::vector<TimerNode> heap_;
+        std::vector<TimerNode> heap_;
 
-    std::unordered_map<int, size_t> ref_;       //保存节点 id 和其在堆中的下标的映射
+        std::unordered_map<int, size_t> ref_;       //保存节点 id 和其在堆中的下标的映射
 };
 
 #endif

@@ -120,7 +120,7 @@ void HeapTimer::clear() {
     heap_.clear();
 }
 
-int HeapTimer::GetNextTick() {
+int HeapTimer::getNextTick() {
     tick();
     size_t res = -1;
     if(!heap_.empty()) {
