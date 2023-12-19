@@ -42,6 +42,10 @@ void Conn::closeFd(){
     fd_ = -1;
 }
 
+PH_Member& Conn::getph_member(){
+    return ph_member_;
+}
+
 ssize_t Conn::read(int* saveError){
     ssize_t len = -1;
     do{
@@ -53,6 +57,15 @@ ssize_t Conn::read(int* saveError){
     return len;
 }
 
+ssize_t Conn::write(int* saveError){
+    //向文件描述符写
+    return writeBuff_.WriteFd(fd_, saveError);
+}
+
 std::string Conn::getMessage(){
     return readBuff_.RetrieveAllToStr();
+}
+
+void Conn::writeToBuff(std::string str){
+    writeBuff_.Append(str);
 }

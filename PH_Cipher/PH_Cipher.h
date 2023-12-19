@@ -42,10 +42,10 @@ class PH_Cipher{
         mpz_class encrypt(const mpz_class& message);       //加密
         int member_join(const PH_Member& joiner);           //成员加入
         int member_leave(const PH_Member& leaver);          //成员离开
-        int sys_entend();                                  //备用密钥分配完毕，系统需要扩展，计划扩展为原来规模的2倍
         ~PH_Cipher();
         
     private:
+        int sys_entend();                   //备用密钥分配完毕，系统需要扩展，计划扩展为原来规模的2倍
         void init_xy();                     //初始化 x 和 y
         void init_lcm_modproduct();         //初始化 lcm 和 mod_product
         void sys_init();                    //系统初始化

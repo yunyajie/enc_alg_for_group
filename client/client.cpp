@@ -30,17 +30,22 @@ bool Client::init(){
 }
 
 void Client::test(){
-    const char* message = "Hello, Server!\n";
+    const char* message = "allocation";
     int cnt = 0;
     int ret = 0;
-    while(true){
-        //发送数据
-        ret = send(client_sock_, message, strlen(message), 0);
-        if(ret == -1){
-            perror("send");
-            close(client_sock_);
-            return;
-        }
-        sleep(3);
+
+    //发送数据
+    ret = send(client_sock_, message, strlen(message), 0);
+    if(ret == -1){
+        perror("send");
+        close(client_sock_);
+        return;
     }
+    sleep(3);
+    char buf[1024];
+    ret = read(client_sock_, buf, 1024);
+    std::cout << "Receive data from server: " << buf << std::endl;
+    //发送数据
+    ret = send(client_sock_, message, strlen(message), 0);
+    sleep(10);
 }

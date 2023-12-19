@@ -267,7 +267,4 @@ void PH_Cipher::master_key_init(){
     if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
 
     std::cout << "主密钥更新  master_key = " << this->m_key << std::endl;
-    // for(int i = 0; i < this->members.size(); i++){
-    //     std::cout << "u_" << i << " : x = " << (members[i].get_modulus() - 1) / 2 << "   e = " << members[i].get_enc_key() << "   m_key mod (2 * x) = " << m_key % (2 * ((members[i].get_modulus() - 1) / 2)) << std::endl;
-    // }
 }
