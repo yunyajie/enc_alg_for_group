@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <chrono>
 #include <unordered_map>
+#include <unordered_set>
 #include <gmpxx.h>
 
 //自定义哈希函数对象
@@ -27,25 +28,38 @@ class PH_Member{
         mpz_class get_enc_key() const;
         mpz_class get_dec_key() const;
         mpz_class get_modulus() const;
+        void set_x(mpz_class& x);
+        void set_y(mpz_class& y);
+        mpz_class get_x();
+        mpz_class get_y();
+        bool isRegistered() const;
+        bool isActive() const;
+        void registered();
+        void active();
+        void deactive();
         ~PH_Member();
     private:
         mpz_class enc_key;                  //成员的加密密钥
         mpz_class dec_key;                  //成员的解密密钥
+        bool isregistered;                  //是否已注册
+        bool isactive;                      //是否加入活跃组
+        mpz_class x;                        // lcm / (modulus - 1)
+        mpz_class y;                        // x^(-1) mod (modulus - 1) / 2
         mpz_class modulus;                  //成员的模数
 };
 
 class PH_Cipher{
     public:
         PH_Cipher(int m = 2, int bit_length = 32);
-        void init();                                       //系统初始化
         int allocation(PH_Member& new_register);           //新成员注册
         mpz_class encrypt(const mpz_class& message);       //加密
-        int member_join(const PH_Member& joiner);           //成员加入
-        int member_leave(const PH_Member& leaver);          //成员离开
+        int member_join(PH_Member& joiner);           //成员加入
+        int member_leave(PH_Member& leaver);          //成员离开
+        int active_size();
         ~PH_Cipher();
         
     private:
-        int sys_entend();                   //备用密钥分配完毕，系统需要扩展，计划扩展为原来规模的2倍
+        int sys_extend();                   //备用密钥分配完毕，系统需要扩展，计划扩展为原来规模的2倍
         void init_xy();                     //初始化 x 和 y
         void init_lcm_modproduct();         //初始化 lcm 和 mod_product
         void sys_init();                    //系统初始化
@@ -55,14 +69,13 @@ class PH_Cipher{
     private:
         int bit_length;                     //密钥长度
         int m;                              //系统最大成员个数
-        std::vector<PH_Member> members;     //所有成员
-        std::unordered_map<mpz_class, int, mpz_class_hash> mod_map; //成员和 members 下标之间的映射， 方便成员加入和离开的管理
-        std::vector<mpz_class> x;           // lcm / m_i
-        std::vector<mpz_class> y;           // x_i 模 m_i 的逆
+
+        std::unordered_map<mpz_class, PH_Member, mpz_class_hash> members;   //系统所有成员集合
+        std::unordered_set<mpz_class, mpz_class_hash> available;            //可分配成员集合
+        std::unordered_set<mpz_class, mpz_class_hash> active_members;       //活跃组成员集合
+
         mpz_class mod_product;              //系统所有成员的模数乘积
         mpz_class lcm;                      // 所有 m_i 的最小公倍数
-        int available;         //标记下一个待分配成员位置
-        std::vector<int> active_members_index;    //活跃成员下标
         mpz_class m_key;                    //主加密密钥
         mpz_class active_mod_product;       //所有活跃成员的模数乘积
         mpz_class active_lcm;               //所有活跃成员 m_i 的最小公倍数
