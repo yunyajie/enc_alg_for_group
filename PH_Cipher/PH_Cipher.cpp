@@ -97,7 +97,7 @@ mpz_class PH_Cipher::encrypt(const mpz_class& message){
     return cipher_text;
 }
 
-int PH_Cipher::member_join(PH_Member& joiner){
+int PH_Cipher::member_join(PH_Member& joiner){      //注意这里的 joiner 的 x 和 y 参数并没有更新
     if(members.find(joiner.get_modulus()) == members.end()) return -1; //成员不在系统中
     //首先判断这个成员是否在活跃组中
     if(active_members.find(joiner.get_modulus()) != active_members.end()){
@@ -114,15 +114,16 @@ int PH_Cipher::member_join(PH_Member& joiner){
     this->active_lcm *= (joiner.get_modulus() - 1) / 2;
 
     //更新主加密密钥
-    //this->m_key += this->members[joiner.get_modulus()].get_enc_key() * this->members[joiner.get_modulus()].get_x() * this->members[joiner.get_modulus()].get_y();
-    this->m_key += joiner.get_enc_key() * joiner.get_x() * joiner.get_y();
+    PH_Member&t = members[joiner.get_modulus()];
+    this->m_key += t.get_enc_key() * t.get_x() * t.get_y();
     this->m_key %= this->lcm;
     if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
+
     std::cout << "主密钥更新  master_key = " << this->m_key << std::endl;
     return 0;
 }
 
-int PH_Cipher::member_leave(PH_Member& leaver){
+int PH_Cipher::member_leave(PH_Member& leaver){     //注意这里的 leaver 的 x 和 y 参数并没有更新
     if(members.find(leaver.get_modulus()) == members.end()) return -1; //成员不在该系统中
     //首先判断这个成员是否在活跃组中
     if(active_members.find(leaver.get_modulus()) == active_members.end()){
@@ -130,18 +131,20 @@ int PH_Cipher::member_leave(PH_Member& leaver){
         return -1;
     }
     //成员在活跃组中，更新系统参数
-    this->active_mod_product /= leaver.get_modulus();
-    this->active_lcm /= (leaver.get_modulus() - 1) / 2;
+    active_mod_product /= leaver.get_modulus();
+    active_lcm /= (leaver.get_modulus() - 1) / 2;
     //从活跃组中删除
-    this->active_members.erase(leaver.get_modulus());
+    active_members.erase(leaver.get_modulus());
     //更新成员状态
     leaver.deactive();
     members[leaver.get_modulus()].deactive();
     //更新主加密密钥
-    this->m_key -= leaver.get_enc_key() * leaver.get_x() * leaver.get_y();
+    PH_Member&t = members[leaver.get_modulus()];
+    this->m_key -= t.get_enc_key() * t.get_x() * t.get_y();
     //mpz_mod(this->m_key.get_mpz_t(), this->m_key.get_mpz_t(), this->lcm.get_mpz_t());   //保证 m_key 是正数
     this->m_key = (this->m_key % this->lcm + this->lcm) % this->lcm;  //保证 m_key 是正数
     if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
+
     std::cout << "主密钥更新  master_key = " << this->m_key << std::endl;
     return 0;
 }
@@ -187,7 +190,7 @@ void PH_Cipher::init_xy(){
 void PH_Cipher::init_lcm_modproduct(){
     this->mod_product = 1;
     this->lcm = 1;
-    for(auto ele : this->members){
+    for(auto& ele : this->members){
         mpz_class mod = ele.first;
         this->lcm *= static_cast<mpz_class>((mod - 1) / 2);
         this->mod_product *= mod;
@@ -294,7 +297,7 @@ void PH_Cipher::master_key_init(){
     m_key mod p_i = e_i mod p_i    (2)
     于是有：
     由 (2) m_key = k * p_i + e_i
-    由 m_key 和 p_i 都是奇数， k * p_i 是偶数，又有 p_i 是素数，k 是偶数，于是 (k * p_i) mod (2 * p_i) = 0
+    由 m_key 和 e_i 都是奇数， k * p_i 是偶数，又有 p_i 是素数，则 k 是偶数，于是 (k * p_i) mod (2 * p_i) = 0
     结论：
     m_key mod (2 * p_i) 
     = (k * p_i + e_i) mod (2 * p_i) 
