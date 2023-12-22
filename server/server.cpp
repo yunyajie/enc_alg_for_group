@@ -111,7 +111,7 @@ void Server::addClient(int fd, sockaddr_in addr){
     clients_[fd].init(fd, addr);
     //监听客户端的读事件
     epoller_->addFd(fd, EPOLLIN | connEvent_);
-    setFdNonblock(fd);
+    setFdNonblock(fd);  //设置为非阻塞
 }
 
 void Server::dealListen(){
@@ -181,7 +181,11 @@ void Server::dealWrite(Conn* client){
     //处理写事件
     int err = 0;
     client->write(&err);
-    epoller_->modFd(client->getfd(), EPOLLIN | connEvent_);
+    if(err & EAGAIN){
+        epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);
+    }else{
+        epoller_->modFd(client->getfd(), EPOLLIN | connEvent_);
+    }
 }
 
 

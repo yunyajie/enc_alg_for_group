@@ -48,4 +48,6 @@ void Client::test(){
     //发送数据
     ret = send(client_sock_, message, strlen(message), 0);
     sleep(10);
+    ret = read(client_sock_, buf, 1024);
+    std::cout << "Receive data from server: " << buf << std::endl;
 }
