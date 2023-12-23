@@ -16,7 +16,8 @@ class Conn{
         PH_Member& getph_member();              //初始化其加密参数
         ssize_t read(int* saveError);
         ssize_t write(int* saveError);
-        std::string getMessage();
+        int getMessage(std::pair<std::string, std::string>& message);
+        void addMessage(const std::string& title, const std::string& content);
 
         static bool isET;                       //默认是ET模式
         static std::atomic<int> userCount;      //总共的客户端连接数量

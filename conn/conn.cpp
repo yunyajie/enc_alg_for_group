@@ -62,8 +62,12 @@ ssize_t Conn::write(int* saveError){
     return writeBuff_.WriteFd(fd_, saveError);
 }
 
-std::string Conn::getMessage(){
-    return readBuff_.RetrieveAllToStr();
+int Conn::getMessage(std::pair<std::string, std::string>& message){
+    return readBuff_.getMessage(message);
+}
+
+void Conn::addMessage(const std::string& title, const std::string& content){
+    writeBuff_.addMessage(title, content);
 }
 
 void Conn::writeToBuff(std::string str){
