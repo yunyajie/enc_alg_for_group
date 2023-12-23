@@ -153,6 +153,10 @@ int PH_Cipher::active_size(){
     return active_members.size();
 }
 
+int PH_Cipher::sys_size(){
+    return members.size();
+}
+
 PH_Cipher::~PH_Cipher(){}
 
 //系统扩展为原来的两倍

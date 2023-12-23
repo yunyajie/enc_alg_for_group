@@ -51,11 +51,12 @@ class PH_Member{
 class PH_Cipher{
     public:
         PH_Cipher(int m = 2, int bit_length = 32);
-        int allocation(PH_Member& new_register);           //新成员注册
-        mpz_class encrypt(const mpz_class& message);       //加密
-        int member_join(PH_Member& joiner);           //成员加入
-        int member_leave(PH_Member& leaver);          //成员离开
-        int active_size();
+        int allocation(PH_Member& new_register);        //新成员注册
+        mpz_class encrypt(const mpz_class& message);    //加密
+        int member_join(PH_Member& joiner);             //成员加入
+        int member_leave(PH_Member& leaver);            //成员离开
+        int active_size();                              //活跃组规模
+        int sys_size();                                 //系统规模
         ~PH_Cipher();
         
     private:
