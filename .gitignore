@@ -1,5 +1,4 @@
-test
-test.cpp
+test*
 .vscode/
 temp/
 main
