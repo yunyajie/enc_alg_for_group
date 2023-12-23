@@ -23,6 +23,7 @@ class Buffer{
 
         void Retrieve(size_t len);              //将读指针前进 len 个单位
         void RetrieveUntil(const char* end);    //将读指针前进到 end
+        std::string RetrieveUntilToStr(const char* end); //将读指针前进到 end，并将这之间的字符串返回
 
         void RetrieveAll() ;
         std::string RetrieveAllToStr();
@@ -34,13 +35,21 @@ class Buffer{
         void Append(const char* str, size_t len);
         void Append(const void* data, size_t len);
         void Append(const Buffer& buff);
+        void Append(const char& c);
 
         ssize_t ReadFd(int fd, int* Errno);         //从文件描述符 fd 中读取数据
         ssize_t WriteFd(int fd, int* Errno);        //向文件描述符 fd 中写入数据
 
+        int getMessage(std::pair<std::string, std::string>& message);       //从缓冲获取一条完整消息对， <消息头，消息体>
+        void addMessage(const std::string& title, const std::string& content);      //向缓冲区写入一条完整消息
+
+        static const char border;                        //消息边界
+        static const char delimiter;                     //消息头和内容的分隔符
+
     private:
         char* BeginPtr_();                          //缓冲区起始位置指针
         const char* BeginPtr_() const;
+        char* Peek_();                         //下一个可读的指针位置
         void MakeSpace_(size_t len);                //确保缓冲区可以装下 len 长的字符串
 
         std::vector<char> buffer_;                  //缓冲区

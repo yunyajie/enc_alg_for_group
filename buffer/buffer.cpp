@@ -1,5 +1,9 @@
 #include "buffer.h"
 
+const char Buffer::border = '#';
+
+const char Buffer::delimiter = ':';
+
 Buffer::Buffer(int initBuffSize) : buffer_(initBuffSize), readPos_(0), writePos_(0){}
 
 //可读的字符数
@@ -32,6 +36,12 @@ void Buffer::Retrieve(size_t len){
 void Buffer::RetrieveUntil(const char* end){
     assert(Peek() <= end);
     Retrieve(end - Peek());
+}
+
+std::string Buffer::RetrieveUntilToStr(const char* end){
+    std::string str(Peek(), end - Peek() + 1);
+    Retrieve(end - Peek() + 1);
+    return str;
 }
 
 //用0填满缓冲区
@@ -77,7 +87,7 @@ void Buffer::Append(const char* str, size_t len) {
     //确保有位置可写入
     EnsureWriteable(len);
     std::copy(str, str + len, BeginWrite());    //写入
-    //写入后更新下一个可写入位置下标
+    //写入后更新下一个写入位置下标
     HasWritten(len);
 }
 
@@ -85,6 +95,15 @@ void Buffer::Append(const char* str, size_t len) {
 void Buffer::Append(const Buffer& buff) {
     Append(buff.Peek(), buff.ReadableBytes());
 }
+
+void Buffer::Append(const char& c){
+    //确保有位置可写入
+    EnsureWriteable(1);
+    *BeginWrite() = c;
+    //写入后更新写一个写入位置下标
+    HasWritten(1);
+}
+
 
 //确保有空间可写入，空间不够时拓展空间
 void Buffer::EnsureWriteable(size_t len) {
@@ -156,4 +175,48 @@ void Buffer::MakeSpace_(size_t len) {
         writePos_ = readPos_ + readable;
         assert(readable == ReadableBytes());
     }
+}
+
+char* Buffer::Peek_() {
+    return BeginPtr_() + readPos_;
+}
+
+//返回值： -1 表示消息损坏，0 表示成功获取消息 -2 表示消息不完整(没有遇到消息右边界)
+int Buffer::getMessage(std::pair<std::string, std::string>& message){
+    int readable = ReadableBytes();
+    if(readable == 0) return -2;
+    //消息第一个字符为 #
+    if(*Peek() != '#') return -1;
+    char* s = Peek_();
+    s++;
+    readable--;
+    std::string str;        //原始消息
+    while(readable){
+        if(*s == '#') break;
+        s++;
+        readable--;
+    }
+    if(*s == '#'){
+        str = RetrieveUntilToStr(s);
+        //删除头尾处的 #
+        str.erase(0, 1);
+        str.pop_back();
+        if(str.find(':') == std::string::npos){ //消息损坏
+            return -1;
+        }
+        int index = str.find(':');
+        message.first = str.substr(0, index);
+        message.second = str.substr(index + 1);
+        return 0;
+    }
+    return -2;
+}
+
+void Buffer::addMessage(const std::string& title, const std::string& content){
+    //一条完整的消息形式为  #title:content#
+    Append(border);
+    Append(title);
+    Append(delimiter);
+    Append(content);
+    Append(border);
 }
