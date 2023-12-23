@@ -2,6 +2,7 @@
 #define _CLIENT_H_
 
 #include "../PH_Cipher/PH_Cipher.h"
+#include "../buffer/buffer.h"
 #include <arpa/inet.h>
 #include <assert.h>
 #include <unistd.h>
@@ -18,6 +19,8 @@ class Client{
         const char* server_ip_;             //服务端IP地址
         sockaddr_in server_addr_;           //服务端地址
         int client_sock_;                   //客户端套接字
+        Buffer readBuf_;                    //读缓冲区
+        Buffer writeBuf_;                   //写缓冲区
 };
 
 

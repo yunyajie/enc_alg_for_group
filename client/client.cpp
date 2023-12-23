@@ -30,24 +30,22 @@ bool Client::init(){
 }
 
 void Client::test(){
-    const char* message = "allocation";
-    int cnt = 0;
-    int ret = 0;
+    writeBuf_.addMessage("allocation", "client");
+    int err = 0;
+    writeBuf_.WriteFd(client_sock_, &err);
+    
+    readBuf_.ReadFd(client_sock_, &err);
+    std::pair<std::string, std::string> message1, message2, message3;
+    readBuf_.getMessage(message1);
+    std::cout << "Receive from server：<" << message1.first << ":" << message1.second << ">" << std::endl;
 
-    //发送数据
-    ret = send(client_sock_, message, strlen(message), 0);
-    if(ret == -1){
-        perror("send");
-        close(client_sock_);
-        return;
-    }
-    sleep(3);
-    char buf[1024];
-    ret = read(client_sock_, buf, 1024);
-    std::cout << "Receive data from server: " << buf << std::endl;
-    //发送数据
-    ret = send(client_sock_, message, strlen(message), 0);
-    sleep(10);
-    ret = read(client_sock_, buf, 1024);
-    std::cout << "Receive data from server: " << buf << std::endl;
+    writeBuf_.addMessage("mem_join", "client");
+    readBuf_.ReadFd(client_sock_, &err);
+    readBuf_.getMessage(message2);
+    std::cout << "Receive from server：<" << message2.first << ":" << message2.second << ">" << std::endl;
+
+    writeBuf_.addMessage("mem_leave", "client");
+    readBuf_.ReadFd(client_sock_, &err);
+    readBuf_.getMessage(message3);
+    std::cout << "Receive from server：<" << message3.first << ":" << message3.second << ">" << std::endl;
 }
