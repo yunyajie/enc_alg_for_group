@@ -139,38 +139,46 @@ void Server::dealRead(Conn* client){
     int err = 0;
     client->read(&err);
     //获取读到的消息决定客户端要求
-    string message = client->getMessage();
-    cout << "Server receive data from client " << client->getfd() << " : " << message << endl;
-    if(message == "allocation"){
-        //成员注册
-        onRead_allocation(client);
-    }else if(message == "mem_join"){
-        //成员加入活跃组
-        onRead_member_join();
-    }else if(message == "mem_leave"){
-        //成员离开活跃组
-        onRead_member_leave();
+    pair<string, string> message;
+    ret = client->getMessage(message);
+    if(ret == 0){//获得一条完整的消息
+        cout << "Server receive data from client " << client->getfd() << " : <" << message.first << ":" << message.second << ">" << endl;
+        if(message.first == "allocation"){
+            //成员注册
+            onRead_allocation(client);
+        }else if(message.first == "mem_join"){
+            //成员加入活跃组
+            onRead_member_join(client);
+        }else if(message.first == "mem_leave"){
+            //成员离开活跃组
+            onRead_member_leave(client);
+        }else{
+            //非预期行为
+            onRead_error();
+        }
+    }else if(ret == -2){//消息未完全接收
+        epoller_->modFd(client->getfd(), EPOLLIN | connEvent_); //再次等待新的数据到来
     }else{
-        //非预期行为
-        onRead_error();
+        //数据损坏，关闭客户端连接
+        cout << "数据损坏" << endl;
+        closeConn(client);
     }
 }
 
 void Server::onRead_allocation(Conn* client){
     ph_cipher_->allocation(client->getph_member());
     //将解密密钥写入临时缓冲区
-    client->writeToBuff(client->getph_member().get_dec_key().get_str());
-    client->writeToBuff("#");
-    client->writeToBuff(client->getph_member().get_modulus().get_str());
+    client->addMessage("dec_key", client->getph_member().get_dec_key().get_str());
+    client->addMessage("modulus", client->getph_member().get_modulus().get_str());
     epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);
 }
 
-void Server::onRead_member_join(){
-
+int Server::onRead_member_join(Conn* client){//成员加入活跃组
+    return ph_cipher_->member_join(client->getph_member());
 }
 
-void Server::onRead_member_leave(){
-
+int Server::onRead_member_leave(Conn* client){//成员离开活跃组
+    return ph_cipher_->member_leave(client->getph_member());
 }
 
 void Server::onRead_error(){
@@ -181,9 +189,9 @@ void Server::dealWrite(Conn* client){
     //处理写事件
     int err = 0;
     client->write(&err);
-    if(err & EAGAIN){
+    if(err & EAGAIN){//不可写，没写完，尝试再次写
         epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);
-    }else{
+    }else{//写完了，等待读事件
         epoller_->modFd(client->getfd(), EPOLLIN | connEvent_);
     }
 }
