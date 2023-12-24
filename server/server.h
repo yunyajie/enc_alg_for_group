@@ -24,7 +24,7 @@ class Server{
         void onRead_allocation(Conn* client);//成员注册
         int onRead_member_join(Conn* client);//成员离开
         int onRead_member_leave(Conn* client);//成员离开
-        void onRead_error();//非预期行为
+        void onRead_error(Conn* client);//非预期行为
         //写事件需要处理的逻辑
         void onWrite_newKey();//组密钥更新
     private:

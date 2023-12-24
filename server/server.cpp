@@ -30,6 +30,7 @@ void Server::start(){
                 assert(clients_.count(fd) > 0);
                 //客户端断连，更新主密钥并向组内广播
 
+                //向客户端回送错误发生
                 closeConn(&clients_[fd]);   //关闭连接
             }else if(events & EPOLLIN){
                 assert(clients_.count(fd) > 0);
@@ -154,18 +155,22 @@ void Server::dealRead(Conn* client){
             onRead_member_leave(client);
         }else{
             //非预期行为
-            onRead_error();
+            onRead_error(client);
         }
     }else if(ret == -2){//消息未完全接收
         epoller_->modFd(client->getfd(), EPOLLIN | connEvent_); //再次等待新的数据到来
     }else{
         //数据损坏，关闭客户端连接
         cout << "数据损坏" << endl;
-        closeConn(client);
+        //向客户端回送错误消息
+        client->addMessage("err", "message damaged");
+        epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);
+        //closeConn(client);
     }
 }
 
 void Server::onRead_allocation(Conn* client){
+    assert(client);
     ph_cipher_->allocation(client->getph_member());
     //将解密密钥写入临时缓冲区
     client->addMessage("dec_key", client->getph_member().get_dec_key().get_str());
@@ -174,18 +179,41 @@ void Server::onRead_allocation(Conn* client){
 }
 
 int Server::onRead_member_join(Conn* client){//成员加入活跃组
-    return ph_cipher_->member_join(client->getph_member());
+    assert(client);
+    int ret = 0;
+    ret = ph_cipher_->member_join(client->getph_member());
+    //向客户端会送加入成功或失败的消息
+    if(ret == 0){//成功
+        client->addMessage("mem_join", "ok");
+    }else if(ret < 0){//加入失败
+        client->addMessage("mem_join", "bad");
+    }
+    epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);    //向客户端回送消息
+    return ret;
 }
 
 int Server::onRead_member_leave(Conn* client){//成员离开活跃组
-    return ph_cipher_->member_leave(client->getph_member());
+    assert(client);
+    int ret = ph_cipher_->member_leave(client->getph_member());
+    //向客户端会送加入成功或失败的消息
+    if(ret == 0){
+        client->addMessage("mem_leave", "ok");
+    }else if(ret < 0){
+        client->addMessage("mem_leave", "bad");
+    }
+    epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);    //向客户端回送消息
+    return ret;
 }
 
-void Server::onRead_error(){
+void Server::onRead_error(Conn* client){
+    assert(client);
     cout << "Unexpected EPOLLIN event!" << endl;
+    client->addMessage("err", "Unexpected behaviour!");
+    epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);    //向客户端回送消息
 }
 
 void Server::dealWrite(Conn* client){
+    assert(client);
     //处理写事件
     int err = 0;
     client->write(&err);
