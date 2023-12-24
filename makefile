@@ -19,4 +19,4 @@ $(target_client):$(object_client) $(object_common)
 
 .PHONY:clean
 clean:
-	rm -f $(object_server) $(object_client) $(object_common)
+	rm -f $(object_server) $(object_client) $(object_common) testserver testclient
