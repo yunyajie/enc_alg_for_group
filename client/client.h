@@ -12,6 +12,7 @@ class Client{
         Client(int server_port, const char* server_ip);
         ~Client();
         void test();
+        std::pair<std::string, std::string> sendAndreceive(const std::string& title, const std::string& content);      //向服务器发送消息并获取服务器回送的消息
     private:
         bool init();                        //初始化套接字和服务端地址
     private:

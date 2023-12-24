@@ -10,6 +10,17 @@ Client::~Client(){
     }
 }
 
+std::pair<std::string, std::string> Client::sendAndreceive(const std::string& title, const std::string& content){
+    std::pair<std::string, std::string> message;
+    int err = 0;
+    writeBuf_.addMessage(title, content);
+    writeBuf_.WriteFd(client_sock_, &err);
+    readBuf_.ReadFd(client_sock_, &err);
+    readBuf_.getMessage(message);
+    return message;
+}
+
+
 bool Client::init(){
     //初始化客户端套接字
     client_sock_ = socket(AF_INET, SOCK_STREAM, 0);
@@ -29,23 +40,28 @@ bool Client::init(){
     return true;
 }
 
+
+
 void Client::test(){
+
+
     writeBuf_.addMessage("allocation", "client");
     int err = 0;
     writeBuf_.WriteFd(client_sock_, &err);
     
     readBuf_.ReadFd(client_sock_, &err);
-    std::pair<std::string, std::string> message1, message2, message3;
+    std::pair<std::string, std::string> message1;
+    readBuf_.getMessage(message1);
+    std::cout << "Receive from server：<" << message1.first << ":" << message1.second << ">" << std::endl;
     readBuf_.getMessage(message1);
     std::cout << "Receive from server：<" << message1.first << ":" << message1.second << ">" << std::endl;
 
-    writeBuf_.addMessage("mem_join", "client");
-    readBuf_.ReadFd(client_sock_, &err);
-    readBuf_.getMessage(message2);
-    std::cout << "Receive from server：<" << message2.first << ":" << message2.second << ">" << std::endl;
+    message1 = sendAndreceive("mem_join", "client");
+    std::cout << "Receive from server：<" << message1.first << ":" << message1.second << ">" << std::endl;
 
-    writeBuf_.addMessage("mem_leave", "client");
-    readBuf_.ReadFd(client_sock_, &err);
-    readBuf_.getMessage(message3);
-    std::cout << "Receive from server：<" << message3.first << ":" << message3.second << ">" << std::endl;
+    message1 = sendAndreceive("mem_leave", "client");
+    std::cout << "Receive from server：<" << message1.first << ":" << message1.second << ">" << std::endl;
+
+    message1 = sendAndreceive("err", "client");
+    std::cout << "Receive from server：<" << message1.first << ":" << message1.second << ">" << std::endl;
 }
