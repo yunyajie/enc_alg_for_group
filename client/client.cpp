@@ -64,4 +64,6 @@ void Client::test(){
 
     message1 = sendAndreceive("err", "client");
     std::cout << "Receive from server：<" << message1.first << ":" << message1.second << ">" << std::endl;
+
+    sleep(10);
 }
