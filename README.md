@@ -1,4 +1,2 @@
 # enc_alg_for_group
-//在 new_ph 分支上重构一下 PH_Cipher
-g++ -o main main.cpp server/server.cpp PH_Cipher/PH_Cipher.cpp conn/conn.cpp buffer/buffer.cpp server/epoller.cpp -lgmp -lgmpxx
-g++ -o cli_test client/client.cpp client/main.cpp PH_Cipher/PH_Cipher.cpp -lgmp -lgmpxx
+基于 PH 加密和 GCRT 的组密钥管理原型系统的实现
