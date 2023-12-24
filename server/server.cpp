@@ -1,13 +1,23 @@
 #include "server.h"
 using namespace std;
 
-Server::Server(int port):port_(port), isClose_(false), epoller_(new Epoller()), ph_cipher_(new PH_Cipher()){
+Server::Server(int port, int timeoutMs, bool openLog, int logLevel):port_(port), timeoutMs_(timeoutMs), isClose_(false), epoller_(new Epoller()), ph_cipher_(new PH_Cipher()){
     Conn::userCount = 0;
     Conn::isET = true;
     connEvent_ =  EPOLLONESHOT | EPOLLRDHUP | EPOLLET;
     //初始化监听套接字
     if(!initSock()){
         isClose_ = true;
+    }
+    //打开日志
+    if(openLog){
+        Log::Instance()->init(logLevel, "./log", ".log", 1024);
+        if(isClose_){
+            LOG_ERROR("========== Server init error! ==========");
+        }else{
+            LOG_INFO("========== Server init ==========");
+            LOG_INFO("Port: %d, LogSys level: %d", port_, logLevel);
+        }
     }
 }
 
@@ -16,7 +26,7 @@ Server::~Server(){
 }
 
 void Server::start(){
-    if(!isClose_) cout << "==============Server start==============" << endl;
+    if(!isClose_){ LOG_INFO("========== Server start =========="); }
     while(!isClose_){
         //默认无事件将阻塞
         int eventCnt = epoller_->wait();
@@ -28,25 +38,24 @@ void Server::start(){
                 dealListen();  //处理监听操作----接受新的连接
             }else if(events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)){
                 assert(clients_.count(fd) > 0);
-                //客户端断连，更新主密钥并向组内广播
+                
+                if(clients_[fd].getph_member().isActive()){//如果该用户是活跃组的成员但是掉线了，将该用户移出活跃组
+                    ph_cipher_->member_leave(clients_[fd].getph_member());
+                }
+                //客户端断连，更新组密钥并向组内广播
 
-                //向客户端回送错误发生
                 closeConn(&clients_[fd]);   //关闭连接
             }else if(events & EPOLLIN){
                 assert(clients_.count(fd) > 0);
                 //处理读操作-------新用户注册或旧用户加入
                 dealRead(&clients_[fd]);
-
-                //重新添加读事件到内核事件表
-                //epoller_->modFd(fd, EPOLLIN | EPOLLET | EPOLLRDHUP | EPOLLONESHOT);
             }else if(events & EPOLLOUT){
                 assert(clients_.count(fd) > 0);
-                cout << "输出事件触发" << endl;
-                //处理写操作-------向组内发布新的组密钥或向新成员发送它的私钥
+                //处理写操作
                 dealWrite(&clients_[fd]);
-
             }else{
                 cout << "Unexpected event!" <<endl;
+                LOG_ERROR("Unexpected event!");
             }
         }
     }
@@ -113,6 +122,7 @@ void Server::addClient(int fd, sockaddr_in addr){
     //监听客户端的读事件
     epoller_->addFd(fd, EPOLLIN | connEvent_);
     setFdNonblock(fd);  //设置为非阻塞
+    LOG_INFO("Client[%d] in!", clients_[fd].getfd());
 }
 
 void Server::dealListen(){
@@ -143,6 +153,7 @@ void Server::dealRead(Conn* client){
     pair<string, string> message;
     ret = client->getMessage(message);
     if(ret == 0){//获得一条完整的消息
+        LOG_INFO("Server receive data from client %d : < %s, %s >", client->getfd(), message.first.c_str(), message.second.c_str());
         cout << "Server receive data from client " << client->getfd() << " : <" << message.first << ":" << message.second << ">" << endl;
         if(message.first == "allocation"){
             //成员注册
@@ -155,6 +166,7 @@ void Server::dealRead(Conn* client){
             onRead_member_leave(client);
         }else{
             //非预期行为
+            LOG_ERROR("Unexpected event!");
             onRead_error(client);
         }
     }else if(ret == -2){//消息未完全接收
@@ -165,6 +177,7 @@ void Server::dealRead(Conn* client){
         //向客户端回送错误消息
         client->addMessage("err", "message damaged");
         epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);
+        LOG_ERROR("Client message damaged!");
         //closeConn(client);
     }
 }
@@ -176,6 +189,7 @@ void Server::onRead_allocation(Conn* client){
     client->addMessage("dec_key", client->getph_member().get_dec_key().get_str());
     client->addMessage("modulus", client->getph_member().get_modulus().get_str());
     epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);
+    LOG_INFO("Client[%d] allocation!", client->getfd());
 }
 
 int Server::onRead_member_join(Conn* client){//成员加入活跃组
@@ -185,8 +199,10 @@ int Server::onRead_member_join(Conn* client){//成员加入活跃组
     //向客户端会送加入成功或失败的消息
     if(ret == 0){//成功
         client->addMessage("mem_join", "ok");
+        LOG_INFO("Client[%d] join in active group!", client->getfd());
     }else if(ret < 0){//加入失败
         client->addMessage("mem_join", "bad");
+        LOG_ERROR("Client[%d] join error!", client->getfd());
     }
     epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);    //向客户端回送消息
     return ret;
@@ -198,8 +214,10 @@ int Server::onRead_member_leave(Conn* client){//成员离开活跃组
     //向客户端会送加入成功或失败的消息
     if(ret == 0){
         client->addMessage("mem_leave", "ok");
+        LOG_INFO("Client[%d] leave active group!", client->getfd());
     }else if(ret < 0){
         client->addMessage("mem_leave", "bad");
+        LOG_ERROR("Client[%d] leave error!", client->getfd());
     }
     epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);    //向客户端回送消息
     return ret;
@@ -207,7 +225,7 @@ int Server::onRead_member_leave(Conn* client){//成员离开活跃组
 
 void Server::onRead_error(Conn* client){
     assert(client);
-    cout << "Unexpected EPOLLIN event!" << endl;
+    LOG_ERROR("Client[%d] Unexpected EPOLLIN event!", client->getfd());
     client->addMessage("err", "Unexpected behaviour!");
     epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);    //向客户端回送消息
 }
@@ -227,6 +245,7 @@ void Server::dealWrite(Conn* client){
 
 void Server::closeConn(Conn* client){
     assert(client);
+    LOG_INFO("Client[%d] quit!", client->getfd());
     epoller_->delFd(client->getfd());
     client->closeFd();
 }
