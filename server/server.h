@@ -7,10 +7,11 @@
 #include <memory>
 #include <unordered_map>
 #include <fcntl.h>
+#include <gmpxx.h>
 
 class Server{
     public:
-        Server(int port = 8000, int timeoutMs = 5, bool openLog = true, int logLevel = 0);
+        Server(int port, int keylevel = 30, int timeoutMs = 5, bool openLog = true, int logLevel = 0);
         ~Server();
         void start();               //启动
     private:
@@ -22,12 +23,14 @@ class Server{
         void dealRead(Conn* client);                    //处理读事件
         void dealWrite(Conn* client);                   //处理写事件
         //读事件中需要处理的逻辑
-        void onRead_allocation(Conn* client);//成员注册
-        int onRead_member_join(Conn* client);//成员离开
-        int onRead_member_leave(Conn* client);//成员离开
-        void onRead_error(Conn* client);//非预期行为
+        void onRead_allocation(Conn* client);           //成员注册
+        int onRead_member_join(Conn* client);           //成员离开
+        int onRead_member_leave(Conn* client);          //成员离开
+        void onRead_error(Conn* client);                //非预期行为
         //写事件需要处理的逻辑
-        void onWrite_newKey();//组密钥更新
+        void onWrite_newKey();                          //组密钥更新----向所有活跃组成员的写缓冲区写入新的组密钥的广播消息并触发其写事件
+
+        void generate_new_gk();
     private:
         int port_;                              //服务器端口
         int listenfd_;                          //监听套接字
@@ -38,6 +41,9 @@ class Server{
         // uint32_t listenEvent_;                  //监听的文件描述符的事件
         uint32_t connEvent_;                    //连接的文件描述符的事件
         std::unordered_map<int, Conn> clients_;  //客户端连接的信息
+
+        int key_leavel_;//组密钥位数
+        mpz_class gk_;//组密钥
 };
 
 

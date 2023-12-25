@@ -1,7 +1,7 @@
 #include "server.h"
 using namespace std;
 
-Server::Server(int port, int timeoutMs, bool openLog, int logLevel):port_(port), timeoutMs_(timeoutMs), isClose_(false), epoller_(new Epoller()), ph_cipher_(new PH_Cipher()){
+Server::Server(int port, int keylevel, int timeoutMs, bool openLog, int logLevel):port_(port), key_leavel_(keylevel), timeoutMs_(timeoutMs), isClose_(false), epoller_(new Epoller()), ph_cipher_(new PH_Cipher()){
     Conn::userCount = 0;
     Conn::isET = true;
     connEvent_ =  EPOLLONESHOT | EPOLLRDHUP | EPOLLET;
@@ -11,12 +11,12 @@ Server::Server(int port, int timeoutMs, bool openLog, int logLevel):port_(port),
     }
     //打开日志
     if(openLog){
-        Log::Instance()->init(logLevel, "./log", ".log", 1024);
+        Log::Instance()->init(logLevel, "./log", "_server.log", 1024);
         if(isClose_){
             LOG_ERROR("========== Server init error! ==========");
         }else{
             LOG_INFO("========== Server init ==========");
-            LOG_INFO("Port: %d, LogSys level: %d", port_, logLevel);
+            LOG_INFO("Port: %d, LogSys level: %d, GK Level: %d", port_, logLevel, key_leavel_);
         }
     }
 }
@@ -43,7 +43,8 @@ void Server::start(){
                     ph_cipher_->member_leave(clients_[fd].getph_member());
                 }
                 //客户端断连，更新组密钥并向组内广播
-
+                onWrite_newKey();
+                LOG_DEBUG("new group key: %s", gk_.get_str().c_str());
                 closeConn(&clients_[fd]);   //关闭连接
             }else if(events & EPOLLIN){
                 assert(clients_.count(fd) > 0);
@@ -54,7 +55,6 @@ void Server::start(){
                 //处理写操作
                 dealWrite(&clients_[fd]);
             }else{
-                cout << "Unexpected event!" <<endl;
                 LOG_ERROR("Unexpected event!");
             }
         }
@@ -154,31 +154,29 @@ void Server::dealRead(Conn* client){
     ret = client->getMessage(message);
     if(ret == 0){//获得一条完整的消息
         LOG_INFO("Server receive data from client %d : < %s, %s >", client->getfd(), message.first.c_str(), message.second.c_str());
-        cout << "Server receive data from client " << client->getfd() << " : <" << message.first << ":" << message.second << ">" << endl;
-        if(message.first == "allocation"){
-            //成员注册
+        if(message.first == "allocation"){//成员注册
             onRead_allocation(client);
-        }else if(message.first == "mem_join"){
-            //成员加入活跃组
-            onRead_member_join(client);
-        }else if(message.first == "mem_leave"){
-            //成员离开活跃组
-            onRead_member_leave(client);
-        }else{
-            //非预期行为
-            LOG_ERROR("Unexpected event!");
+        }else if(message.first == "mem_join"){//成员加入活跃组
+            if(0 == onRead_member_join(client)){
+                onWrite_newKey();
+            }else{
+                LOG_ERROR("Client[%d] join failure!", client->getfd());
+            }
+        }else if(message.first == "mem_leave"){//成员离开活跃组
+            if(0 == onRead_member_leave(client)){
+                onWrite_newKey();
+            }else{
+                LOG_ERROR("Client[%d] leave failure!", client->getfd());
+            }
+        }else{//非预期行为
             onRead_error(client);
         }
     }else if(ret == -2){//消息未完全接收
         epoller_->modFd(client->getfd(), EPOLLIN | connEvent_); //再次等待新的数据到来
-    }else{
-        //数据损坏，关闭客户端连接
-        cout << "数据损坏" << endl;
-        //向客户端回送错误消息
+    }else{//数据损坏，向客户端回送错误消息
         client->addMessage("err", "message damaged");
         epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);
         LOG_ERROR("Client message damaged!");
-        //closeConn(client);
     }
 }
 
@@ -187,7 +185,7 @@ void Server::onRead_allocation(Conn* client){
     ph_cipher_->allocation(client->getph_member());
     //将解密密钥写入临时缓冲区
     client->addMessage("dec_key", client->getph_member().get_dec_key().get_str());
-    client->addMessage("modulus", client->getph_member().get_modulus().get_str());
+    client->addMessage("mod", client->getph_member().get_modulus().get_str());
     epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);
     LOG_INFO("Client[%d] allocation!", client->getfd());
 }
@@ -225,7 +223,7 @@ int Server::onRead_member_leave(Conn* client){//成员离开活跃组
 
 void Server::onRead_error(Conn* client){
     assert(client);
-    LOG_ERROR("Client[%d] Unexpected EPOLLIN event!", client->getfd());
+    LOG_ERROR("Client[%d] unexpected request event!", client->getfd());
     client->addMessage("err", "Unexpected behaviour!");
     epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);    //向客户端回送消息
 }
@@ -240,6 +238,31 @@ void Server::dealWrite(Conn* client){
     }else{//写完了，等待读事件
         epoller_->modFd(client->getfd(), EPOLLIN | connEvent_);
     }
+}
+
+void Server::onWrite_newKey(){
+    generate_new_gk();
+    mpz_class rekeymessage = ph_cipher_->encrypt(gk_);
+    for(auto &ele : clients_){
+        if(ele.second.getph_member().isActive()){
+            ele.second.addMessage("rekeying", rekeymessage.get_str());
+            epoller_->modFd(ele.second.getfd(), EPOLLOUT | connEvent_);
+        }
+    }
+    LOG_INFO("Server send rekeying message: %s", rekeymessage.get_str().c_str());
+}
+
+void Server::generate_new_gk(){
+    // 使用当前时间的微秒级别信息作为种子
+    auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    gmp_randstate_t state;
+    //初始化 GMP 伪随机数生成器状态
+    gmp_randinit_default(state);
+    gmp_randseed_ui(state, static_cast<unsigned long>(seed));
+    mpz_urandomb(gk_.get_mpz_t(), state, key_leavel_);
+    //清理状态
+    gmp_randclear(state);
+    LOG_DEBUG("Server select a new group key: %s", gk_.get_str().c_str());
 }
 
 

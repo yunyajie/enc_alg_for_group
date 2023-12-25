@@ -1,9 +1,9 @@
 CC=g++
 target_server=testserver
 target_client=testclient
-object_server=server/epoller.o server/main.o server/server.o conn/conn.o log/log.o
+object_server=server/epoller.o server/main.o server/server.o conn/conn.o
 object_client=client/client.o client/main.o 
-object_common=PH_Cipher/PH_Cipher.o buffer/buffer.o
+object_common=PH_Cipher/PH_Cipher.o buffer/buffer.o log/log.o
 LDFLAGS=-lgmp -lgmpxx
 
 all:$(target_server) $(target_client)
@@ -19,4 +19,4 @@ $(target_client):$(object_client) $(object_common)
 
 .PHONY:clean
 clean:
-	rm -f $(object_server) $(object_client) $(object_common) testserver testclient log/*.log
+	rm -f $(object_server) $(object_client) $(object_common) testserver testclient log/*.log *.log temp/*.log
