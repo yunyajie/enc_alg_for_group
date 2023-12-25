@@ -70,6 +70,10 @@ void Conn::addMessage(const std::string& title, const std::string& content){
     writeBuff_.addMessage(title, content);
 }
 
+std::string Conn::GetReadStrNotRetrive(){
+    return readBuff_.GetStrNotRetrieve();
+}
+
 void Conn::writeToBuff(std::string str){
     writeBuff_.Append(str);
 }

@@ -18,6 +18,7 @@ class Conn{
         ssize_t write(int* saveError);
         int getMessage(std::pair<std::string, std::string>& message);
         void addMessage(const std::string& title, const std::string& content);
+        std::string GetReadStrNotRetrive();
 
         static bool isET;                       //默认是ET模式
         static std::atomic<int> userCount;      //总共的客户端连接数量
