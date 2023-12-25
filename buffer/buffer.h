@@ -27,6 +27,7 @@ class Buffer{
 
         void RetrieveAll() ;
         std::string RetrieveAllToStr();
+        std::string GetStrNotRetrieve();             //获取缓冲区中的信息并返回但不改读写指针
 
         const char* BeginWriteConst() const;        //写一个可写入的位置
         char* BeginWrite();

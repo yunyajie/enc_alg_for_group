@@ -58,6 +58,11 @@ std::string Buffer::RetrieveAllToStr() {
     return str;
 }
 
+std::string Buffer::GetStrNotRetrieve(){
+    std::string str(Peek(), ReadableBytes());
+    return str;
+}
+
 //下一个可写入的位置
 const char* Buffer::BeginWriteConst() const {
     return BeginPtr_() + writePos_;
