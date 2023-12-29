@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <gmpxx.h>
+#include "../log/log.h"
 
 //自定义哈希函数对象
 struct mpz_class_hash{

@@ -118,8 +118,8 @@ int PH_Cipher::member_join(PH_Member& joiner){      //注意这里的 joiner 的
     this->m_key += t.get_enc_key() * t.get_x() * t.get_y();
     this->m_key %= this->lcm;
     if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
-
-    std::cout << "主密钥更新  master_key = " << this->m_key << std::endl;
+    LOG_INFO("member join with mod %s", joiner.get_modulus().get_str().c_str());
+    LOG_INFO("master key refresh %s", this->m_key.get_str().c_str());
     return 0;
 }
 
@@ -145,7 +145,8 @@ int PH_Cipher::member_leave(PH_Member& leaver){     //注意这里的 leaver 的
     this->m_key = (this->m_key % this->lcm + this->lcm) % this->lcm;  //保证 m_key 是正数
     if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
 
-    std::cout << "主密钥更新  master_key = " << this->m_key << std::endl;
+    LOG_INFO("member leave with mod %s", leaver.get_modulus().get_str().c_str());
+    LOG_INFO("master key refresh %s", this->m_key.get_str().c_str());
     return 0;
 }
 
@@ -161,7 +162,8 @@ PH_Cipher::~PH_Cipher(){}
 
 //系统扩展为原来的两倍
 int PH_Cipher::sys_extend(){
-    std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>系统拓展<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+    LOG_INFO(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> PH_Cipher system extend >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+    //std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>系统拓展<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
     std::vector<PH_Member> newmembers = init_members(this->m);
     //将新的密钥加入到系统的成员集合中以及可分配集合中
     for(auto& ele : newmembers){
@@ -204,6 +206,7 @@ void PH_Cipher::init_lcm_modproduct(){
 
 //系统初始化
 void PH_Cipher::sys_init(){
+    LOG_INFO("PH_Cipher system init!");
     //使用 bit_length 初始化 modulus_lower_bound 如果是从数据库载入，则取其中最大的模数为下界
     gmp_randstate_t state;
     gmp_randinit_default(state);    //初始化 GMP 伪随机数生成器状态
@@ -311,6 +314,6 @@ void PH_Cipher::master_key_init(){
     */
     //需要满足 m_key % 2 == 1
     if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
-
-    std::cout << "主密钥更新  master_key = " << this->m_key << std::endl;
+    LOG_INFO("master key refresh %s", this->m_key.get_str().c_str());
+    //std::cout << "主密钥更新  master_key = " << this->m_key << std::endl;
 }
