@@ -11,7 +11,9 @@
 
 class Server{
     public:
-        Server(int port, int keylevel = 30, int timeoutMs = 5, bool openLog = true, int logLevel = 0);
+        Server(int port, 
+        int sqlport, const char* sqluser, const char* sqlpwd, const char* dbName, int connPoolNum,//数据库配置
+        int keylevel = 30, int timeoutMs = 5, bool openLog = true, int logLevel = 0);
         ~Server();
         void start();               //启动
     private:
@@ -23,6 +25,7 @@ class Server{
         void dealRead(Conn* client);                    //处理读事件
         void dealWrite(Conn* client);                   //处理写事件
         //读事件中需要处理的逻辑
+        void onRead_userVerify(Conn* client, bool isLogin, const std::string& message);           //成员登录和注册
         void onRead_allocation(Conn* client);           //成员注册
         int onRead_member_join(Conn* client);           //成员离开
         int onRead_member_leave(Conn* client);          //成员离开

@@ -1,7 +1,11 @@
 #include "client.h"
 
 Client::Client(int server_port, const char* server_ip):server_port_(server_port), server_ip_(server_ip), isactive_(false), isregistered_(false){
-    init();
+    if(init()){
+        isStop_ = false;
+    }else{
+        isStop_ = true;
+    }
 }
 
 Client::~Client(){
@@ -11,8 +15,23 @@ Client::~Client(){
 }
 
 void Client::start(){
+    if(isStop_) return;
     LOG_INFO("========== Client start ==========");
     std::pair<std::string, std::string> message;
+    LOG_DEBUG("trying login!");
+    writeBuf_.addMessage("login","yun-yun");
+    writeFd();
+    readFd(message);
+    std::cout << message.first << " : " << message.second << std::endl;
+
+    LOG_DEBUG("trying register!");
+    writeBuf_.addMessage("register","yi-yi");
+    writeFd();
+    readFd(message);
+    std::cout << message.first << " : " << message.second << std::endl;
+
+
+
     if(!isregistered_){
         writeBuf_.addMessage("allocation", "client");//注册
         writeFd();//向服务端发送

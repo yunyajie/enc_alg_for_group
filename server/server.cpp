@@ -1,7 +1,9 @@
 #include "server.h"
 using namespace std;
 
-Server::Server(int port, int keylevel, int timeoutMs, bool openLog, int logLevel):port_(port), key_leavel_(keylevel), timeoutMs_(timeoutMs), isClose_(false), epoller_(new Epoller()), ph_cipher_(new PH_Cipher()){
+Server::Server(int port, 
+    int sqlport, const char* sqluser, const char* sqlpwd, const char* dbName, int connPoolSize,
+    int keylevel, int timeoutMs, bool openLog, int logLevel):port_(port), key_leavel_(keylevel), timeoutMs_(timeoutMs), isClose_(false), epoller_(new Epoller()), ph_cipher_(new PH_Cipher()){
     Conn::userCount = 0;
     Conn::isET = true;
     connEvent_ =  EPOLLONESHOT | EPOLLRDHUP | EPOLLET;
@@ -9,6 +11,10 @@ Server::Server(int port, int keylevel, int timeoutMs, bool openLog, int logLevel
     if(!initSock()){
         isClose_ = true;
     }
+
+    //打开数据库连接池
+    SqlConnPool::Instance()->Init("localhost", sqlport, sqluser, sqlpwd, dbName, connPoolSize);
+
     //打开日志
     if(openLog){
         Log::Instance()->init(logLevel, "./log", "_server.log", 1024);
@@ -168,7 +174,11 @@ void Server::dealRead(Conn* client){
             }else{
                 LOG_ERROR("Client[%d] leave failure!", client->getfd());
             }
-        }else{//非预期行为
+        }else if(message.first == "login" || message.first == "register"){//成员登录和注册
+            bool isLogin = (message.first == "login");
+            onRead_userVerify(client, isLogin, message.second);
+        }
+        else{//非预期行为
             onRead_error(client);
         }
     }else if(ret == -2){//消息未完全接收
@@ -178,6 +188,19 @@ void Server::dealRead(Conn* client){
         epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);
         LOG_ERROR("Client message damaged!");
     }
+}
+
+void Server::onRead_userVerify(Conn* client, bool isLogin, const string& message){
+    assert(client);
+    int index = message.find('-');
+    string name = message.substr(0, index);
+    string pwd = message.substr(index + 1);
+    if(client->userVerify(name, pwd, isLogin)){//向客户端返回注册和登录结果
+        client->addMessage("login", "ok");
+    }else{
+        client->addMessage("login", "bad");
+    }
+    epoller_->modFd(client->getfd(), connEvent_ | EPOLLOUT);
 }
 
 void Server::onRead_allocation(Conn* client){

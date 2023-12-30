@@ -20,6 +20,7 @@ class Client{
     private:
         bool init();                        //初始化套接字和服务端地址
     private:
+        bool isStop_;                       //是否连接成功可启动
         const int server_port_;             //服务端端口号
         const char* server_ip_;             //服务端IP地址
         sockaddr_in server_addr_;           //服务端地址
