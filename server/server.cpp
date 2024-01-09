@@ -14,10 +14,16 @@ Server::Server(int port,
 
     //打开数据库连接池
     SqlConnPool::Instance()->Init("localhost", sqlport, sqluser, sqlpwd, dbName, connPoolSize);
-
-    //打开日志
     if(openLog){
         Log::Instance()->init(logLevel, "./log", "_server.log", 1024);
+    }
+    //初始化密码系统
+    if(!ph_cipher_->sys_init_fromDb()){
+        isClose_ = true;
+        LOG_ERROR("========== Cipher System init error! ==========");
+    }
+    //打开日志
+    if(openLog){
         if(isClose_){
             LOG_ERROR("========== Server init error! ==========");
         }else{
@@ -160,8 +166,13 @@ void Server::dealRead(Conn* client){
     ret = client->getMessage(message);
     if(ret == 0){//获得一条完整的消息
         LOG_INFO("Server receive data from client %d : < %s, %s >", client->getfd(), message.first.c_str(), message.second.c_str());
-        if(message.first == "allocation"){//成员注册
-            onRead_allocation(client);
+        cout << "Server receive data from client " << client->getfd() << " : " << message.first << " , "<< message.second << endl;
+        if(message.first == "allocation"){//成员加入密码系统，如果是新注册的成员则分配新的密钥
+            if(!onRead_allocation(client)){
+                client->addMessage("allocation", "bad");
+                LOG_ERROR("Client[%d] allocation failure!", client->getfd());
+                epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);
+            }
         }else if(message.first == "mem_join"){//成员加入活跃组
             if(0 == onRead_member_join(client)){
                 onWrite_newKey();
@@ -177,8 +188,7 @@ void Server::dealRead(Conn* client){
         }else if(message.first == "login" || message.first == "register"){//成员登录和注册
             bool isLogin = (message.first == "login");
             onRead_userVerify(client, isLogin, message.second);
-        }
-        else{//非预期行为
+        }else{//非预期行为
             onRead_error(client);
         }
     }else if(ret == -2){//消息未完全接收
@@ -195,7 +205,7 @@ void Server::onRead_userVerify(Conn* client, bool isLogin, const string& message
     int index = message.find('-');
     string name = message.substr(0, index);
     string pwd = message.substr(index + 1);
-    if(client->userVerify(name, pwd, isLogin)){//向客户端返回注册和登录结果
+    if(client->userVerify(name, pwd, isLogin)){//向客户端返回注册和登录结果-----仅仅注册和登录不分配密钥
         client->addMessage("login", "ok");
     }else{
         client->addMessage("login", "bad");
@@ -203,14 +213,95 @@ void Server::onRead_userVerify(Conn* client, bool isLogin, const string& message
     epoller_->modFd(client->getfd(), connEvent_ | EPOLLOUT);
 }
 
-void Server::onRead_allocation(Conn* client){
+bool Server::onRead_allocation(Conn* client){
     assert(client);
-    ph_cipher_->allocation(client->getph_member());
+    bool isNew = false;
+    //ph_cipher_->allocation(client->getph_member());
+    MYSQL* sql;
+    SqlConnRAII(&sql, SqlConnPool::Instance());
+    assert(sql);
+    char order[256] = {0};
+    MYSQL_FIELD* fields = nullptr;
+    MYSQL_RES* res = nullptr;
+    MYSQL_ROW row;
+    snprintf(order, 256, "SELECT registered FROM users WHERE id=%d", client->getUserDbid());
+    if(mysql_query(sql, order)){
+        LOG_ERROR("%s", mysql_error(sql));
+        return false;
+    }
+    res = mysql_store_result(sql);
+    if(res == nullptr){
+        LOG_ERROR("%s", mysql_error(sql));
+        return false;
+    }
+    row = mysql_fetch_row(res);
+    if(row){
+        int registered = atoi(row[0]);
+        if(registered == 0) isNew = true;
+    }
+    if(isNew){//新注册的成员
+        if(ph_cipher_->allocation(client->getph_member()) == -1) return false;
+        snprintf(order, 256, "SELECT key_id FROM ph_keys WHERE modulus=%s", client->getph_member().get_modulus().get_str().c_str());
+        LOG_DEBUG("%s", order);
+        if(mysql_query(sql, order)){
+            LOG_ERROR("%s", mysql_error(sql));
+            return false;
+        }
+        res = mysql_store_result(sql);
+        if(res == nullptr){
+            LOG_ERROR("%s", mysql_error(sql));
+            mysql_free_result(res);
+            return false;
+        }
+        row = mysql_fetch_row(res);
+        int k_id = -1;
+        if(row){
+            k_id = atoi(row[0]);
+        }else{
+            return false;
+        }
+        snprintf(order, 256, "UPDATE users SET registered=%d, key_id=%d WHERE id=%d", 1, k_id, client->getUserDbid());//设置用户使用的密钥并将用户设置为已注册
+        LOG_DEBUG("%s", order);
+        if(mysql_query(sql, order)){
+            LOG_ERROR("%s", mysql_error(sql));
+            return false;
+        }
+        snprintf(order, 256, "UPDATE ph_keys SET used=%d WHERE key_id=%d", 1, k_id);//设置密钥为占用状态
+        LOG_DEBUG("%s", order);
+        if(mysql_query(sql, order)){
+            LOG_ERROR("%s", mysql_error(sql));
+            return false;
+        }
+    }else{//已分配密钥的成员
+        snprintf(order, 256, "SELECT enc_key, modulus FROM all_info WHERE id=%d", client->getUserDbid());
+        LOG_DEBUG("%s", order);
+        if(mysql_query(sql, order)){
+            LOG_ERROR("%s", mysql_error(sql));
+            return false;
+        }
+        res = mysql_store_result(sql);
+        if(res == nullptr){
+            LOG_ERROR("%s", mysql_error(sql));
+            mysql_free_result(res);
+            return false;
+        }
+        row = mysql_fetch_row(res);
+        if(row){
+            mpz_class enc_key(row[0]);
+            mpz_class mod(row[1]);
+            client->getph_member() = PH_Member(enc_key, mod);
+            client->getph_member().registered();
+        }else{
+            return false;
+        }
+    }
     //将解密密钥写入临时缓冲区
+    client->addMessage("allocation", "ok");
     client->addMessage("dec_key", client->getph_member().get_dec_key().get_str());
     client->addMessage("mod", client->getph_member().get_modulus().get_str());
     epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);
     LOG_INFO("Client[%d] allocation!", client->getfd());
+    return true;
 }
 
 int Server::onRead_member_join(Conn* client){//成员加入活跃组

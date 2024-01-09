@@ -17,7 +17,8 @@ class Conn{
         sockaddr_in getaddr();
         void init(int fd, const sockaddr_in& addr);
         void closeFd();
-        PH_Member& getph_member();              //初始化其加密参数
+        PH_Member& getph_member();                              //获取其加密参数内容
+        bool setph_member(PH_Member* ph, bool isLogin);         //设置其加密参数更新数据库
         ssize_t read(int* saveError);
         ssize_t write(int* saveError);
         int getMessage(std::pair<std::string, std::string>& message);
@@ -30,6 +31,10 @@ class Conn{
         void writeToBuff(std::string str);      //向写缓冲区写入
 
         bool userVerify(const std::string& name, const std::string& pwd, bool isLogin);     //isLogin  注册是0 登录是1
+
+        //获取用户状态
+        std::string getUserName();
+        int getUserDbid();
     private:
         int fd_;                    //连接文件描述符
         sockaddr_in addr_;          //客户端地址
@@ -39,6 +44,10 @@ class Conn{
         PH_Member ph_member_;       //加密算法信息
 
         //用户状态
+        bool islogin_;              //是否成功登录
+        std::string userName_;      //用户账户姓名
+        std::string passwd_;        //用户密码
+        int userDbid_;              //用户数据库id
 };
 
 #endif

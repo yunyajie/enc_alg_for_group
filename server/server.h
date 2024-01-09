@@ -4,6 +4,8 @@
 #include "../log/log.h"
 #include "../PH_Cipher/PH_Cipher.h"
 #include "../conn/conn.h"
+#include "../pool/sqlconnpool.h"
+#include "../pool/sqlconnRAII.h"
 #include <memory>
 #include <unordered_map>
 #include <fcntl.h>
@@ -26,7 +28,7 @@ class Server{
         void dealWrite(Conn* client);                   //处理写事件
         //读事件中需要处理的逻辑
         void onRead_userVerify(Conn* client, bool isLogin, const std::string& message);           //成员登录和注册
-        void onRead_allocation(Conn* client);           //成员注册
+        bool onRead_allocation(Conn* client);           //成员向密码系统注册
         int onRead_member_join(Conn* client);           //成员离开
         int onRead_member_leave(Conn* client);          //成员离开
         void onRead_error(Conn* client);                //非预期行为

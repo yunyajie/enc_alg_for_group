@@ -8,6 +8,8 @@
 #include <unordered_set>
 #include <gmpxx.h>
 #include "../log/log.h"
+#include "../pool/sqlconnpool.h"
+#include "../pool/sqlconnRAII.h"
 
 //自定义哈希函数对象
 struct mpz_class_hash{
@@ -58,10 +60,13 @@ class PH_Cipher{
         int member_leave(PH_Member& leaver);            //成员离开
         int active_size();                              //活跃组规模
         int sys_size();                                 //系统规模
+
+        bool sys_init_fromDb();                         //从数据库初始化    在 server 将连接池启动之后再初始化
         ~PH_Cipher();
         
     private:
         int sys_extend();                   //备用密钥分配完毕，系统需要扩展，计划扩展为原来规模的2倍
+        int sys_extend_Db();                //备用密钥分配完毕，系统需要扩展，计划扩展为原来规模的2倍，并将新的密钥加入到数据库中
         void init_xy();                     //初始化 x 和 y
         void init_lcm_modproduct();         //初始化 lcm 和 mod_product
         void sys_init();                    //系统初始化
