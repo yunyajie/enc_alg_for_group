@@ -11,7 +11,7 @@
 
 class Client{
     public:
-        Client(int server_port, const char* server_ip);
+        Client(int server_port, const char* server_ip, const char* userName, const char* passwd);
         ~Client();
         void start();                                                   //启动
         int readFd(std::pair<std::string, std::string>& message);       //每次读一个消息
@@ -32,8 +32,11 @@ class Client{
         bool isactive_;                      //是否加入活跃组
         mpz_class mod_;                     //模数
         mpz_class dec_key_;                 //解密密钥
-        mpz_class gk_cipher_;
-        mpz_class gk_;
+        mpz_class gk_cipher_;               //接收到的密文
+        mpz_class gk_;                      //组密钥
+
+        std::string user_name_;              //用户名
+        std::string passwd_;                 //登录密码
 };
 
 

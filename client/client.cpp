@@ -1,6 +1,7 @@
 #include "client.h"
 
-Client::Client(int server_port, const char* server_ip):server_port_(server_port), server_ip_(server_ip), isactive_(false), isregistered_(false){
+Client::Client(int server_port, const char* server_ip, const char* userName, const char* passwd)
+:server_port_(server_port), server_ip_(server_ip), isactive_(false), isregistered_(false), user_name_(userName), passwd_(passwd){
     if(init()){
         isStop_ = false;
     }else{
@@ -18,34 +19,45 @@ void Client::start(){
     if(isStop_) return;
     LOG_INFO("========== Client start ==========");
     std::pair<std::string, std::string> message;
-    LOG_DEBUG("trying login!");
-    writeBuf_.addMessage("login","yun-yun");
-    writeFd();
-    readFd(message);
-    std::cout << message.first << " : " << message.second << std::endl;
+    // LOG_DEBUG("trying login!");
+    // writeBuf_.addMessage("login","yun-yun");
+    // writeFd();
+    // readFd(message);
+    // std::cout << message.first << " : " << message.second << std::endl;
 
     LOG_DEBUG("trying register!");
-    writeBuf_.addMessage("register","yi-yi");
+    std::string user_info = user_name_ + "-" + passwd_;
+    writeBuf_.addMessage("register", user_info);
     writeFd();
     readFd(message);
     std::cout << message.first << " : " << message.second << std::endl;
-
-
+    if(message.second == "bad"){
+        return;
+    }
 
     if(!isregistered_){
-        writeBuf_.addMessage("allocation", "client");//注册
+        writeBuf_.addMessage("allocation", "client");//向密码系统注册
         writeFd();//向服务端发送
         readFd(message);
-        dec_key_ = mpz_class(message.second);
-        LOG_DEBUG("dec_key = %s", dec_key_.get_str().c_str());
-        std::cout << "dec_key = " << dec_key_.get_str() << std::endl;
-        readFd(message);
-        mod_ = mpz_class(message.second);
-        LOG_DEBUG("mod = %s", mod_.get_str().c_str());
-        std::cout << "mod = " << mod_.get_str() << std::endl;
-        isregistered_ = true;
+        LOG_DEBUG("<%s:%s>", message.first, message.second);
+        std::cout << message.first << " : " << message.second << std::endl;
+        if(message.second == "ok"){
+            readFd(message);
+            dec_key_ = mpz_class(message.second);
+            LOG_DEBUG("dec_key = %s", dec_key_.get_str().c_str());
+            std::cout << "dec_key = " << dec_key_.get_str() << std::endl;
+            readFd(message);
+            mod_ = mpz_class(message.second);
+            LOG_DEBUG("mod = %s", mod_.get_str().c_str());
+            std::cout << "mod = " << mod_.get_str() << std::endl;
+            isregistered_ = true;
+        }else{
+            isregistered_ = false;
+            return;
+        }
+        
     }
-    if(!isactive_){
+    if(!isactive_){//加入活跃组
         writeBuf_.addMessage("mem_join", "client");
         writeFd();
         readFd(message);
