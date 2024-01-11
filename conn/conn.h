@@ -17,13 +17,12 @@ class Conn{
         sockaddr_in getaddr();
         void init(int fd, const sockaddr_in& addr);
         void closeFd();
-        PH_Member& getph_member();                              //获取其加密参数内容
-        bool setph_member(PH_Member* ph, bool isLogin);         //设置其加密参数更新数据库
-        ssize_t read(int* saveError);
-        ssize_t write(int* saveError);
-        int getMessage(std::pair<std::string, std::string>& message);
-        void addMessage(const std::string& title, const std::string& content);
-        std::string GetReadStrNotRetrive();
+        PH_Member& getph_member();                                      //获取其加密参数内容
+        ssize_t read(int* saveError);                                   //从文件描述符读取数据到输入缓冲区，直到把所有数据读完，返回读到的字节数或 -1
+        ssize_t write(int* saveError);                                  //向文件描述符写入输出缓冲区中所有数据
+        int getMessage(std::pair<std::string, std::string>& message);   //从输入缓冲区获取一条消息
+        void addMessage(const std::string& title, const std::string& content);  //向输出缓冲区添加一条消息
+        std::string GetReadStrNotRetrive();                             //查看待发送的或待读取的消息
 
         static bool isET;                       //默认是ET模式
         static std::atomic<int> userCount;      //总共的客户端连接数量

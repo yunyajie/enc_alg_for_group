@@ -49,20 +49,33 @@ PH_Member& Conn::getph_member(){
     return ph_member_;
 }
 
-ssize_t Conn::read(int* saveError){
-    ssize_t len = -1;
+ssize_t Conn::read(int* saveError){//从文件描述符读取数据，直到把所有数据读完
+    ssize_t len = 0;
+    ssize_t ret = -1;
     do{
-        len = readBuff_.ReadFd(fd_, saveError);
-        if(len <= 0){
+        ret = readBuff_.ReadFd(fd_, saveError);
+        if(ret <= 0){//-1 表示发生错误， 0 表示数据读取完毕
             break;
+        }else{
+            len += ret;
         }
     }while(isET); //本项目默认是ET模式
-    return len;
+    return ret < 0 ? ret : len; //ret < 0 表示发生了错误，如果没有发生错误，返回读到的字节数
 }
 
 ssize_t Conn::write(int* saveError){
-    //向文件描述符写
-    return writeBuff_.WriteFd(fd_, saveError);
+    //向文件描述符写入缓冲区中所有数据
+    int writesize = writeBuff_.ReadableBytes();
+    int count = 0;
+    int ret = 0;
+    do{
+        ret = writeBuff_.WriteFd(fd_, saveError);
+        if(ret < 0){//发生错误
+            return ret;
+        }
+        count += ret;
+    }while(count < writesize);
+    return count;
 }
 
 int Conn::getMessage(std::pair<std::string, std::string>& message){
@@ -168,6 +181,10 @@ bool Conn::userVerify(const std::string& name, const std::string& pwd, bool isLo
     }
     //SqlConnPool::Instance()->FreeConn(sql);
     return flag;
+}
+
+std::string Conn::getUserName(){
+    return userName_;
 }
 
 int Conn::getUserDbid(){
