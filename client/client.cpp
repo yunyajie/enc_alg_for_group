@@ -27,7 +27,7 @@ void Client::start(){
 
     LOG_DEBUG("trying register!");
     std::string user_info = user_name_ + "-" + passwd_;
-    writeBuf_.addMessage("register", user_info);
+    writeBuf_.addMessage("login", user_info);
     writeFd();
     readFd(message);
     std::cout << message.first << " : " << message.second << std::endl;
