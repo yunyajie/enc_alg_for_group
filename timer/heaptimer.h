@@ -6,6 +6,7 @@
 #include <chrono>
 #include <unordered_map>
 #include <assert.h>
+#include "../log/log.h"
 
 
 typedef std::function<void()> TimeoutCallBack;
@@ -18,6 +19,9 @@ struct TimerNode {
     int id;
     TimeStamp expires;          //时间到达的时间戳
     TimeoutCallBack cb;         //时间到达时的回调函数
+    bool cyclicity;             //周期性   用于周期性事件
+    int period;                 //周期间隔
+    TimerNode(int id, TimeStamp expires, const TimeoutCallBack cb, bool cyclicity = false, int period = 0):id(id), expires(expires), cb(cb), cyclicity(cyclicity), period(period){}
     //重载 < 运算符用于比较函数
     bool operator<(const TimerNode& t) {
         return expires < t.expires;
@@ -31,13 +35,13 @@ class HeapTimer {
         
         void adjust(int id, int newExpires);                        //调整指定id的结点
 
-        void add(int id, int timeOut, const TimeoutCallBack& cb);   //添加新节点或修改已有节点
+        void add(int id, int timeOut, const TimeoutCallBack& cb, bool cyclicity = false, int period = 0);   //添加新节点或修改已有节点
 
         void doWork(int id);                                        //删除指定id结点，并触发回调函数
 
-        void clear();
+        void clear();                                               //清空定时器
 
-        void tick();                                                //清除超时结点
+        void tick();                                                //执行超时结点的回调函数并清除该节点
 
         void pop();                                                 //删除队首结点
 

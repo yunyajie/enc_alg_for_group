@@ -38,14 +38,14 @@ bool HeapTimer::siftdown_(size_t index, size_t n) {
 }
 
 //添加新节点或修改已有节点
-void HeapTimer::add(int id, int timeout, const TimeoutCallBack& cb) {
+void HeapTimer::add(int id, int timeout, const TimeoutCallBack& cb, bool cyclicity, int period) {
     assert(id >= 0);
     size_t i;
     if(ref_.count(id) == 0) {
         /* 新节点：堆尾插入，调整堆 */
         i = heap_.size();
         ref_[id] = i;
-        heap_.push_back({id, Clock::now() + MS(timeout), cb});
+        heap_.push_back({id, Clock::now() + MS(timeout), cb, cyclicity, period});
         siftup_(i);
     } 
     else {
@@ -53,11 +53,14 @@ void HeapTimer::add(int id, int timeout, const TimeoutCallBack& cb) {
         i = ref_[id];
         heap_[i].expires = Clock::now() + MS(timeout);
         heap_[i].cb = cb;
+        heap_[i].cyclicity = cyclicity;
+        heap_[i].period = period;
         if(!siftdown_(i, heap_.size())) {
             siftup_(i);
         }
     }
 }
+
 
 void HeapTimer::doWork(int id) {
     /* 删除指定id结点，并触发回调函数 */
@@ -105,8 +108,13 @@ void HeapTimer::tick() {
         if(std::chrono::duration_cast<MS>(node.expires - Clock::now()).count() > 0) { 
             break; 
         }
+        LOG_DEBUG("timeout")
         node.cb();
-        pop();
+        if(node.cyclicity){//周期性事件则调整时间
+            adjust(node.id, node.period);
+        }else{//非周期性事件则删除
+            pop();
+        }
     }
 }
 
