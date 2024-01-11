@@ -1,7 +1,7 @@
 CC=g++
 target_server=testserver
 target_client=testclient
-object_server=server/epoller.o server/main.o server/server.o conn/conn.o 
+object_server=server/epoller.o server/main.o server/server.o conn/conn.o timer/heaptimer.o
 object_client=client/client.o client/main.o 
 object_common=PH_Cipher/PH_Cipher.o buffer/buffer.o log/log.o pool/sqlconnpool.o
 LDFLAGS=-lgmp -lgmpxx
