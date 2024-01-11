@@ -145,7 +145,7 @@ ssize_t Buffer::ReadFd(int fd, int* saveErrno) {
     return len;
 }
 
-//向文件描述符 fd 中写入数据
+//向文件描述符 fd 中写入缓冲区中所有数据
 ssize_t Buffer::WriteFd(int fd, int* saveErrno) {
     size_t readSize = ReadableBytes();
     ssize_t len = write(fd, Peek(), readSize);
