@@ -3,31 +3,30 @@ using namespace std;
 
 Server::Server(int port, 
     int sqlport, const char* sqluser, const char* sqlpwd, const char* dbName, int connPoolSize,
-    int keylevel, int timeoutMs, bool openLog, int logLevel):port_(port), key_leavel_(keylevel), timeoutMs_(timeoutMs), isClose_(false), epoller_(new Epoller()), ph_cipher_(new PH_Cipher()){
+    int keylevel, int timeoutMs, bool openLog, int logLevel):port_(port), key_leavel_(keylevel), timeoutMs_(timeoutMs), isClose_(false), epoller_(new Epoller()), ph_cipher_(new PH_Cipher()), timer_(new HeapTimer()){
     Conn::userCount = 0;
     Conn::isET = true;
     connEvent_ =  EPOLLONESHOT | EPOLLRDHUP | EPOLLET;
+    if(openLog){//在最开始处打开日志
+        Log::Instance()->init(logLevel, "./log", "_server.log", 1024);
+    }
     //初始化监听套接字
     if(!initSock()){
         isClose_ = true;
     }
-
     //打开数据库连接池
     SqlConnPool::Instance()->Init("localhost", sqlport, sqluser, sqlpwd, dbName, connPoolSize);
-    if(openLog){
-        Log::Instance()->init(logLevel, "./log", "_server.log", 1024);
-    }
     //初始化密码系统
     if(!ph_cipher_->sys_init_fromDb()){
         isClose_ = true;
-        LOG_ERROR("========== Cipher System init error! ==========");
+        LOG_ERROR(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Cipher System init error! <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
     }
     //打开日志
     if(openLog){
         if(isClose_){
-            LOG_ERROR("========== Server init error! ==========");
+            LOG_ERROR(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Server init error! <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
         }else{
-            LOG_INFO("========== Server init ==========");
+            LOG_INFO(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Server init <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
             LOG_INFO("Port: %d, LogSys level: %d, GK Level: %d", port_, logLevel, key_leavel_);
         }
     }
@@ -35,50 +34,60 @@ Server::Server(int port,
 
 Server::~Server(){
     close(listenfd_);
+    isClose_ = true;
+    SqlConnPool::Instance()->ClosePool();
+}
+
+void Server::test(){
+    cout << "时间到了" << endl;
 }
 
 void Server::start(){
     if(!isClose_){ LOG_INFO("========== Server start =========="); }
+    //添加周期性定时事件---定时更新组密钥
+    timer_->add(listenfd_, timeoutMs_, std::bind(&Server::onWrite_newKey, this), true, 5000);
     while(!isClose_){
         //默认无事件将阻塞
-        int eventCnt = epoller_->wait();
+        int timeout = timer_->getNextTick();
+        int eventCnt = epoller_->wait(timeout);
         for(int i = 0; i < eventCnt; i++){
             int fd = epoller_->getEventFd(i);
             uint32_t events = epoller_->getEvents(i);
             //监听文件描述符
             if(fd == listenfd_){
-                dealListen();  //处理监听操作----接受新的连接
+                dealListen();   //处理监听操作----接受新的连接
             }else if(events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)){
                 assert(clients_.count(fd) > 0);
-                
                 if(clients_[fd].getph_member().isActive()){//如果该用户是活跃组的成员但是掉线了，将该用户移出活跃组
                     ph_cipher_->member_leave(clients_[fd].getph_member());
                 }
                 //客户端断连，更新组密钥并向组内广播
                 onWrite_newKey();
-                LOG_DEBUG("new group key: %s", gk_.get_str().c_str());
                 closeConn(&clients_[fd]);   //关闭连接
             }else if(events & EPOLLIN){
                 assert(clients_.count(fd) > 0);
-                //处理读操作-------新用户注册或旧用户加入
-                dealRead(&clients_[fd]);
+                dealRead(&clients_[fd]);    //处理读操作-------新用户注册或旧用户加入
             }else if(events & EPOLLOUT){
                 assert(clients_.count(fd) > 0);
-                //处理写操作
-                dealWrite(&clients_[fd]);
+                dealWrite(&clients_[fd]);   //处理写操作
             }else{
                 LOG_ERROR("Unexpected event!");
             }
         }
+        timer_->tick();
     }
 }
 
 //初始化监听文件描述符
 bool Server::initSock(){
+    if(port_ > 65535 || port_ < 1024){
+        LOG_ERROR("Port: %d error!", port_);
+        return false;
+    }
     //创建监听套接字
     listenfd_ = socket(AF_INET, SOCK_STREAM, 0);
     if(listenfd_ < 0){
-        perror("socket");
+        LOG_ERROR("Create socket error!");
         return false;
     }
 
@@ -87,8 +96,18 @@ bool Server::initSock(){
     int flag = 1;
     ret = setsockopt(listenfd_, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
     if(ret < 0){
-        perror("setsockopt");
+        LOG_ERROR("Set socket setsockopt SO_REUSEADDR error!");
         close(listenfd_);
+        return false;
+    }
+
+    struct linger optLinger = {0};
+    optLinger.l_onoff = 1;  //优雅关闭：直到所剩数据发送完毕或超时
+    optLinger.l_linger = 1;
+    ret = setsockopt(listenfd_, SOL_SOCKET, SO_LINGER, &optLinger, sizeof(optLinger));
+    if(ret < 0){
+        close(listenfd_);
+        LOG_ERROR("Set socket setsockopt SO_LINGER error!");
         return false;
     }
 
@@ -100,7 +119,7 @@ bool Server::initSock(){
     addr.sin_port = htons(port_);
     ret = bind(listenfd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
     if(ret < 0){
-        perror("bind");
+        LOG_ERROR("Bind Port: %d error!", port_);
         close(listenfd_);
         return false;
     }
@@ -108,14 +127,14 @@ bool Server::initSock(){
     //监听连接
     ret = listen(listenfd_, 5);
     if(ret < 0){
-        perror("listen");
+        LOG_ERROR("Listen port: %d error!", port_);
         close(listenfd_);
         return false;
     }
 
     //添加 listenfd_ 上的输入事件
     if(!epoller_->addFd(listenfd_, EPOLLRDHUP | EPOLLIN | EPOLLET)){
-        perror("epoll_ctl_add");
+        LOG_ERROR("Add listen error!");
         close(listenfd_);
         return false;
     }
@@ -149,18 +168,17 @@ void Server::dealListen(){
     }
 }
 
-void Server::dealRead(Conn* client){
+void Server::dealRead(Conn* client){//处理读事件
     assert(client);
     int ret = -1;
     int readError = 0;
     ret = client->read(&readError);
-    if(ret <= 0 && readError != EAGAIN){
+    if(ret < 0 && readError != EAGAIN){
+        LOG_ERROR("Client[%d] read error!", client->getfd());
+        perror("read");
         closeConn(client);
         return;
     }
-    //处理读事件
-    int err = 0;
-    client->read(&err);
     //获取读到的消息决定客户端要求
     pair<string, string> message;
     ret = client->getMessage(message);
@@ -170,20 +188,16 @@ void Server::dealRead(Conn* client){
         if(message.first == "allocation"){//成员加入密码系统，如果是新注册的成员则分配新的密钥
             if(!onRead_allocation(client)){
                 client->addMessage("allocation", "bad");
-                LOG_ERROR("Client[%d] allocation failure!", client->getfd());
+                LOG_ERROR("Client[%d]: %s allocation failure!", client->getfd(), client->getUserName().c_str());
                 epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);
             }
         }else if(message.first == "mem_join"){//成员加入活跃组
             if(0 == onRead_member_join(client)){
                 onWrite_newKey();
-            }else{
-                LOG_ERROR("Client[%d] join failure!", client->getfd());
             }
         }else if(message.first == "mem_leave"){//成员离开活跃组
             if(0 == onRead_member_leave(client)){
                 onWrite_newKey();
-            }else{
-                LOG_ERROR("Client[%d] leave failure!", client->getfd());
             }
         }else if(message.first == "login" || message.first == "register"){//成员登录和注册
             bool isLogin = (message.first == "login");
@@ -196,7 +210,7 @@ void Server::dealRead(Conn* client){
     }else{//数据损坏，向客户端回送错误消息
         client->addMessage("err", "message damaged");
         epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);
-        LOG_ERROR("Client message damaged!");
+        LOG_ERROR("Client[%d]: %s message damaged!", client->getfd(), client->getUserName().c_str());
     }
 }
 
@@ -216,7 +230,6 @@ void Server::onRead_userVerify(Conn* client, bool isLogin, const string& message
 bool Server::onRead_allocation(Conn* client){
     assert(client);
     bool isNew = false;
-    //ph_cipher_->allocation(client->getph_member());
     MYSQL* sql;
     SqlConnRAII(&sql, SqlConnPool::Instance());
     assert(sql);
@@ -300,7 +313,7 @@ bool Server::onRead_allocation(Conn* client){
     client->addMessage("dec_key", client->getph_member().get_dec_key().get_str());
     client->addMessage("mod", client->getph_member().get_modulus().get_str());
     epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);
-    LOG_INFO("Client[%d] allocation!", client->getfd());
+    LOG_INFO("Client[%d]: %s allocation!", client->getfd(), client->getUserName().c_str());
     return true;
 }
 
@@ -311,10 +324,10 @@ int Server::onRead_member_join(Conn* client){//成员加入活跃组
     //向客户端会送加入成功或失败的消息
     if(ret == 0){//成功
         client->addMessage("mem_join", "ok");
-        LOG_INFO("Client[%d] join in active group!", client->getfd());
+        LOG_INFO("Client[%d]: %s join in active group!", client->getfd(), client->getUserName().c_str());
     }else if(ret < 0){//加入失败
         client->addMessage("mem_join", "bad");
-        LOG_ERROR("Client[%d] join error!", client->getfd());
+        LOG_ERROR("Client[%d]: %s join error!", client->getfd(), client->getUserName().c_str());
     }
     epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);    //向客户端回送消息
     return ret;
@@ -326,10 +339,10 @@ int Server::onRead_member_leave(Conn* client){//成员离开活跃组
     //向客户端会送加入成功或失败的消息
     if(ret == 0){
         client->addMessage("mem_leave", "ok");
-        LOG_INFO("Client[%d] leave active group!", client->getfd());
+        LOG_INFO("Client[%d]: %s leave active group!", client->getfd(), client->getUserName().c_str());
     }else if(ret < 0){
         client->addMessage("mem_leave", "bad");
-        LOG_ERROR("Client[%d] leave error!", client->getfd());
+        LOG_ERROR("Client[%d]: %s leave error!", client->getfd(), client->getUserName().c_str());
     }
     epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);    //向客户端回送消息
     return ret;
@@ -337,7 +350,7 @@ int Server::onRead_member_leave(Conn* client){//成员离开活跃组
 
 void Server::onRead_error(Conn* client){
     assert(client);
-    LOG_ERROR("Client[%d] unexpected request event!", client->getfd());
+    LOG_ERROR("Client[%d]: %s unexpected request event!", client->getfd(), client->getUserName().c_str());
     client->addMessage("err", "Unexpected behaviour!");
     epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);    //向客户端回送消息
 }
@@ -379,10 +392,13 @@ void Server::generate_new_gk(){
     LOG_DEBUG("Server select a new group key: %s", gk_.get_str().c_str());
 }
 
+void Server::extentTime(int id){
+    if(timeoutMs_ > 0) timer_->adjust(id, timeoutMs_);
+}
 
 void Server::closeConn(Conn* client){
     assert(client);
-    LOG_INFO("Client[%d] quit!", client->getfd());
+    LOG_INFO("Client[%d]: %s quit!", client->getfd(), client->getUserName().c_str());
     epoller_->delFd(client->getfd());
     client->closeFd();
 }

@@ -6,6 +6,7 @@
 #include "../conn/conn.h"
 #include "../pool/sqlconnpool.h"
 #include "../pool/sqlconnRAII.h"
+#include "../timer/heaptimer.h"
 #include <memory>
 #include <unordered_map>
 #include <fcntl.h>
@@ -15,7 +16,7 @@ class Server{
     public:
         Server(int port, 
         int sqlport, const char* sqluser, const char* sqlpwd, const char* dbName, int connPoolNum,//数据库配置
-        int keylevel = 30, int timeoutMs = 5, bool openLog = true, int logLevel = 0);
+        int keylevel = 30, int timeoutMs = 5000, bool openLog = true, int logLevel = 0);
         ~Server();
         void start();               //启动
     private:
@@ -35,20 +36,24 @@ class Server{
         //写事件需要处理的逻辑
         void onWrite_newKey();                          //组密钥更新----向所有活跃组成员的写缓冲区写入新的组密钥的广播消息并触发其写事件
 
-        void generate_new_gk();
+        void generate_new_gk();                         //选择一个组密钥
+
+        void extentTime(int id);                        //调整计时器时间为 timeoutMs_ 后
+        void test();
     private:
         int port_;                              //服务器端口
         int listenfd_;                          //监听套接字
         int timeoutMs_;                         //超时事件 毫秒Ms
         std::unique_ptr<Epoller> epoller_;      //epoll 对象
         std::unique_ptr<PH_Cipher> ph_cipher_;  //加密算法对象
+        std::unique_ptr<HeapTimer> timer_;      //定时器
         bool isClose_;                          //是否关闭
-        // uint32_t listenEvent_;                  //监听的文件描述符的事件
+        //uint32_t listenEvent_;                //监听的文件描述符的事件
         uint32_t connEvent_;                    //连接的文件描述符的事件
         std::unordered_map<int, Conn> clients_;  //客户端连接的信息
 
-        int key_leavel_;//组密钥位数
-        mpz_class gk_;//组密钥
+        int key_leavel_;                        //组密钥位数
+        mpz_class gk_;                          //组密钥
 };
 
 
