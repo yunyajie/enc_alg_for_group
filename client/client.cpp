@@ -39,7 +39,7 @@ void Client::start(){
         writeBuf_.addMessage("allocation", "client");//向密码系统注册
         writeFd();//向服务端发送
         readFd(message);
-        LOG_DEBUG("<%s:%s>", message.first, message.second);
+        LOG_DEBUG("<%s:%s>", message.first.c_str(), message.second.c_str());
         std::cout << message.first << " : " << message.second << std::endl;
         if(message.second == "ok"){
             readFd(message);
