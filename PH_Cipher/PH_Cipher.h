@@ -46,7 +46,7 @@ class PH_Member{
         mpz_class dec_key;                  //成员的解密密钥
         bool isregistered;                  //是否已注册
         bool isactive;                      //是否加入活跃组
-        mpz_class x;                        // lcm / (modulus - 1)
+        mpz_class x;                        // exp_mod_product / ((modulus - 1) / 2)
         mpz_class y;                        // x^(-1) mod (modulus - 1) / 2
         mpz_class modulus;                  //成员的模数
 };
@@ -68,7 +68,7 @@ class PH_Cipher{
         int sys_extend();                   //备用密钥分配完毕，系统需要扩展，计划扩展为原来规模的2倍
         int sys_extend_Db();                //备用密钥分配完毕，系统需要扩展，计划扩展为原来规模的2倍，并将新的密钥加入到数据库中
         void init_xy();                     //初始化 x 和 y
-        void init_lcm_modproduct();         //初始化 lcm 和 mod_product
+        void init_modproduct();             //初始化 mod_product 和 exp_mod_product
         void sys_init();                    //系统初始化
         void generate_safe_prime(mpz_class& safe_prime, const unsigned long int reps);
         std::vector<PH_Member> init_members(int n);        //获取新的 n 个可用成员位置
@@ -82,10 +82,10 @@ class PH_Cipher{
         std::unordered_set<mpz_class, mpz_class_hash> active_members;       //活跃组成员集合
 
         mpz_class mod_product;              //系统所有成员的模数乘积
-        mpz_class lcm;                      // 所有 m_i 的最小公倍数
+        mpz_class active_mod_product;       //所有活跃成员模数乘积
+        mpz_class exp_mod_product;          //指数上模数乘积   2*m_1 ... *m_n
+        mpz_class active_exp_mod_product;   //所有活跃成员指数上的模数乘积
         mpz_class m_key;                    //主加密密钥
-        mpz_class active_mod_product;       //所有活跃成员的模数乘积
-        mpz_class active_lcm;               //所有活跃成员 m_i 的最小公倍数
 
         mpz_class modulus_lower_bound;      //生成模数时的下界
 };

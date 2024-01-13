@@ -74,14 +74,14 @@ PH_Member::~PH_Member(){}
 
 PH_Cipher::PH_Cipher(int m, int bit_length):m(m), bit_length(bit_length){
     //系统初始化
-    //sys_init();
+    sys_init();
 }
 
 //新成员注册，系统分配可用密钥
 int PH_Cipher::allocation(PH_Member& new_register){
     if(available.empty()){//密钥分配完毕，系统需要扩展
-        //sys_extend();
-        if(sys_extend_Db() == -1) return -1;
+        sys_extend();
+        //if(sys_extend_Db() == -1) return -1;
     }
     //分配密钥
     mpz_class t = *available.begin();
@@ -111,16 +111,17 @@ int PH_Cipher::member_join(PH_Member& joiner){      //注意这里的 joiner 的
     //加入活跃组
     active_members.insert(joiner.get_modulus());
     //更新系统状态
+    this->active_exp_mod_product *= (joiner.get_modulus() - 1) / 2;
     this->active_mod_product *= joiner.get_modulus();
-    this->active_lcm *= (joiner.get_modulus() - 1) / 2;
 
     //更新主加密密钥
     PH_Member&t = members[joiner.get_modulus()];
     this->m_key += t.get_enc_key() * t.get_x() * t.get_y();
-    this->m_key %= this->lcm;
-    if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
+    this->m_key %= this->active_exp_mod_product;
+    
     LOG_INFO("member join with mod %s", joiner.get_modulus().get_str().c_str());
     LOG_INFO("master key refresh %s", this->m_key.get_str().c_str());
+    std::cout << "master key refresh " << this->m_key.get_str() << std::endl;
     return 0;
 }
 
@@ -132,8 +133,8 @@ int PH_Cipher::member_leave(PH_Member& leaver){     //注意这里的 leaver 的
         return -1;
     }
     //成员在活跃组中，更新系统参数
-    active_mod_product /= leaver.get_modulus();
-    active_lcm /= (leaver.get_modulus() - 1) / 2;
+    this->active_exp_mod_product /= (leaver.get_modulus() - 1) / 2;
+    this->active_mod_product /= leaver.get_modulus();
     //从活跃组中删除
     active_members.erase(leaver.get_modulus());
     //更新成员状态
@@ -142,12 +143,11 @@ int PH_Cipher::member_leave(PH_Member& leaver){     //注意这里的 leaver 的
     //更新主加密密钥
     PH_Member&t = members[leaver.get_modulus()];
     this->m_key -= t.get_enc_key() * t.get_x() * t.get_y();
-    //mpz_mod(this->m_key.get_mpz_t(), this->m_key.get_mpz_t(), this->lcm.get_mpz_t());   //保证 m_key 是正数
-    this->m_key = (this->m_key % this->lcm + this->lcm) % this->lcm;  //保证 m_key 是正数
-    if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
+    this->m_key = (this->m_key % this->active_exp_mod_product + this->active_exp_mod_product) % this->active_exp_mod_product;
 
     LOG_INFO("member leave with mod %s", leaver.get_modulus().get_str().c_str());
     LOG_INFO("master key refresh %s", this->m_key.get_str().c_str());
+    std::cout << "master key refresh " << this->m_key.get_str() << std::endl;
     return 0;
 }
 
@@ -160,26 +160,6 @@ int PH_Cipher::sys_size(){
 }
 
 PH_Cipher::~PH_Cipher(){}
-
-//系统扩展为原来的两倍
-int PH_Cipher::sys_extend(){
-    LOG_INFO(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> PH_Cipher system extend <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
-    //std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>系统拓展<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
-    std::vector<PH_Member> newmembers = init_members(this->m);
-    //将新的密钥加入到系统的成员集合中以及可分配集合中
-    for(auto& ele : newmembers){
-        members.insert(std::make_pair(ele.get_modulus(), ele));
-        available.insert(ele.get_modulus());
-    }
-    //更新系统参数
-    init_lcm_modproduct();
-    init_xy();
-    //更新 m
-    this->m *= 2;
-    //初始化 m_key
-    master_key_init();
-    return 0;
-}
 
 //系统扩展为原来的两倍并更新数据库
 int PH_Cipher::sys_extend_Db(){
@@ -206,7 +186,7 @@ int PH_Cipher::sys_extend_Db(){
         }
     }
     //更新系统参数
-    init_lcm_modproduct();
+    init_modproduct();
     init_xy();
     //更新 m
     this->m *= 2;
@@ -215,28 +195,46 @@ int PH_Cipher::sys_extend_Db(){
     return 0;
 }
 
+//系统扩展为原来的两倍
+int PH_Cipher::sys_extend(){
+    LOG_INFO(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> PH_Cipher system extend <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+    //std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>系统拓展<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+    std::vector<PH_Member> newmembers = init_members(this->m);
+    //将新的密钥加入到系统的成员集合中以及可分配集合中
+    for(auto& ele : newmembers){
+        members.insert(std::make_pair(ele.get_modulus(), ele));
+        available.insert(ele.get_modulus());
+    }
+    //更新系统参数
+    init_modproduct();
+    init_xy();
+    //更新 m
+    this->m *= 2;
+    //初始化 m_key
+    master_key_init();
+    return 0;
+}
+
+//初始化 mod_product 和 exp_mod_product
+void PH_Cipher::init_modproduct(){
+    this->mod_product = 1;
+    this->exp_mod_product = 2;
+    for(auto& ele : this->members){
+        mpz_class mod = ele.first;
+        this->mod_product *= mod;
+        this->exp_mod_product *= static_cast<mpz_class>((mod - 1) / 2);
+    }
+}
+
 //初始化 x 和 y
 void PH_Cipher::init_xy(){
     mpz_class tem_x, tem_y;
-    mpz_class lcm_half = this->lcm / 2;
     for(auto& ele : this->members){
-        tem_x = lcm_half / static_cast<mpz_class>((ele.first - 1) / 2);
+        tem_x = exp_mod_product / static_cast<mpz_class>((ele.first - 1) / 2);
         ele.second.set_x(tem_x);
         mpz_invert(tem_y.get_mpz_t(), tem_x.get_mpz_t(), static_cast<mpz_class>((ele.first - 1) / 2).get_mpz_t());
         ele.second.set_y(tem_y);
     }
-}
-
-//初始化 lcm 和 mod_product
-void PH_Cipher::init_lcm_modproduct(){
-    this->mod_product = 1;
-    this->lcm = 1;
-    for(auto& ele : this->members){
-        mpz_class mod = ele.first;
-        this->lcm *= static_cast<mpz_class>((mod - 1) / 2);
-        this->mod_product *= mod;
-    }
-    this->lcm *= 2;
 }
 
 //系统初始化
@@ -262,14 +260,14 @@ void PH_Cipher::sys_init(){
     this->active_members.clear();
     
     //初始化 mod_product 和 lcm
-    init_lcm_modproduct();
+    init_modproduct();
 
     //初始化 x 和 y
     init_xy();
 
     //初始化 active_mod_product active_lcm
-    this->active_mod_product = 1;  //未有成员注册并加入活跃组
-    this->active_lcm = 2;
+    this->active_mod_product = 1;       //未有成员注册并加入活跃组
+    this->active_exp_mod_product = 2;   //最终分摊到每个成员是在指数上模除 2 * m_i，故默认模数为 2 的影子成员在活跃组中
 
     //初始化 m_key
     master_key_init();
@@ -340,8 +338,8 @@ bool PH_Cipher::sys_init_fromDb(){
 
     this->m = members.size();
 
-    //初始化 mod_product 和 lcm
-    init_lcm_modproduct();
+    //初始化 mod_product 和 exp_mod_product
+    init_modproduct();
 
     //初始化 x 和 y
     init_xy();
@@ -349,7 +347,7 @@ bool PH_Cipher::sys_init_fromDb(){
     //初始化 active_mod_product active_lcm
     this->active_mod_product = 1;  //未有成员注册并加入活跃组
     //this->active_lcm = 1;
-    this->active_lcm = 2;
+    //this->active_lcm = 2;
 
     //初始化 m_key
     master_key_init();
@@ -374,7 +372,7 @@ void PH_Cipher::generate_safe_prime(mpz_class& safe_prime, const unsigned long i
     }
 }
 
-//获取一个随机的解密密钥 其值 < upperLimit，满足条件是 e = 2 * r + 1，即一个奇数，且小于其对应的模数
+//获取一个随机的加密密钥 其值 < upperLimit，满足条件是 e = 2 * r + 1，即一个奇数，且小于其对应的模数
 mpz_class get_enckey(const mpz_class& modulus){
     // 使用当前时间的微秒级别信息作为种子
     auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -409,29 +407,17 @@ std::vector<PH_Member> PH_Cipher::init_members(int n){
 void PH_Cipher::master_key_init(){
     //根据 active_members 中的活跃成员初始化 m_key
     this->m_key = 0;
-    if(active_members.empty()) return;
+    //模数为 2 假设为一个影子成员
+    mpz_class shadow_user_x = this->exp_mod_product / 2;
+    mpz_class shadow_user_y;
+    mpz_invert(shadow_user_y.get_mpz_t(), shadow_user_x.get_mpz_t(), static_cast<mpz_class>(2).get_mpz_t());
+    this->m_key = 1 * shadow_user_x * shadow_user_y;
+    //if(active_members.empty()) return;
     for(auto& ele : active_members){
         PH_Member& t = members[ele];
         this->m_key += t.get_enc_key() * t.get_x() * t.get_y();
     }
-    this->m_key %= this->lcm;
-    if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
-    /*
-    e_i = 2 * r_i + 1 是一个奇数
-    设 mod_i = 2 * p_i + 1, 下面的代码保证 m_key mod 2 = 1，是一个奇数
-    则整理所有条件有： 
-    m_key mod 2 = 1                (1)  
-    m_key mod p_i = e_i mod p_i    (2)
-    于是有：
-    由 (2) m_key = k * p_i + e_i
-    由 m_key 和 e_i 都是奇数， k * p_i 是偶数，又有 p_i 是素数，则 k 是偶数，于是 (k * p_i) mod (2 * p_i) = 0
-    结论：
-    m_key mod (2 * p_i) 
-    = (k * p_i + e_i) mod (2 * p_i) 
-    = (k * p_i) mod (2 * p_i) + e_i mod (2 * p_i) 
-    = e_i mod (2 * p_i) 
-    = e_i
-    */
-    //需要满足 m_key % 2 == 1
+    this->m_key %= this->active_exp_mod_product;
     LOG_INFO("master key init %s", this->m_key.get_str().c_str());
+    std::cout << "master key init " << this->m_key.get_str() << std::endl;
 }
