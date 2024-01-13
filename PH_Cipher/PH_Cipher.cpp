@@ -348,8 +348,7 @@ bool PH_Cipher::sys_init_fromDb(){
 
     //初始化 active_mod_product active_lcm
     this->active_mod_product = 1;  //未有成员注册并加入活跃组
-    //this->active_lcm = 1;
-    this->active_lcm = 2;
+    this->active_lcm = 1;
 
     //初始化 m_key
     master_key_init();
@@ -374,7 +373,7 @@ void PH_Cipher::generate_safe_prime(mpz_class& safe_prime, const unsigned long i
     }
 }
 
-//获取一个随机的解密密钥 其值 < upperLimit，满足条件是 e = 2 * r + 1，即一个奇数，且小于其对应的模数
+//获取一个随机的加密密钥 其值 < upperLimit，满足条件是 e = 2 * r + 1，即一个奇数，且小于其对应的模数
 mpz_class get_enckey(const mpz_class& modulus){
     // 使用当前时间的微秒级别信息作为种子
     auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
