@@ -269,7 +269,7 @@ void PH_Cipher::sys_init(){
 
     //初始化 active_mod_product active_lcm
     this->active_mod_product = 1;  //未有成员注册并加入活跃组
-    this->active_lcm = 1;
+    this->active_lcm = 2;
 
     //初始化 m_key
     master_key_init();
@@ -348,7 +348,8 @@ bool PH_Cipher::sys_init_fromDb(){
 
     //初始化 active_mod_product active_lcm
     this->active_mod_product = 1;  //未有成员注册并加入活跃组
-    this->active_lcm = 1;
+    //this->active_lcm = 1;
+    this->active_lcm = 2;
 
     //初始化 m_key
     master_key_init();
@@ -414,7 +415,7 @@ void PH_Cipher::master_key_init(){
         this->m_key += t.get_enc_key() * t.get_x() * t.get_y();
     }
     this->m_key %= this->lcm;
-
+    if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
     /*
     e_i = 2 * r_i + 1 是一个奇数
     设 mod_i = 2 * p_i + 1, 下面的代码保证 m_key mod 2 = 1，是一个奇数
@@ -432,7 +433,5 @@ void PH_Cipher::master_key_init(){
     = e_i
     */
     //需要满足 m_key % 2 == 1
-    if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
-    LOG_INFO("master key refresh %s", this->m_key.get_str().c_str());
-    //std::cout << "主密钥更新  master_key = " << this->m_key << std::endl;
+    LOG_INFO("master key init %s", this->m_key.get_str().c_str());
 }
