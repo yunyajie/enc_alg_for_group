@@ -16,7 +16,7 @@ class Server{
     public:
         Server(int port, 
         int sqlport, const char* sqluser, const char* sqlpwd, const char* dbName, int connPoolNum,//数据库配置
-        int keylevel = 30, int timeoutMs = 5000, bool openLog = true, int logLevel = 0);
+        int keylevel = 30, int timeoutMs = 300000, bool openLog = true, int logLevel = 0);
         ~Server();
         void start();               //启动
     private:
@@ -37,9 +37,6 @@ class Server{
         void onWrite_newKey();                          //组密钥更新----向所有活跃组成员的写缓冲区写入新的组密钥的广播消息并触发其写事件
 
         void generate_new_gk();                         //选择一个组密钥
-
-        void extentTime(int id);                        //调整计时器时间为 timeoutMs_ 后
-        void test();
     private:
         int port_;                              //服务器端口
         int listenfd_;                          //监听套接字

@@ -38,14 +38,11 @@ Server::~Server(){
     SqlConnPool::Instance()->ClosePool();
 }
 
-void Server::test(){
-    cout << "时间到了" << endl;
-}
 
 void Server::start(){
     if(!isClose_){ LOG_INFO("========== Server start =========="); }
     //添加周期性定时事件---定时更新组密钥
-    timer_->add(listenfd_, timeoutMs_, std::bind(&Server::onWrite_newKey, this), true, 5000);
+    //timer_->add(listenfd_, timeoutMs_, std::bind(&Server::onWrite_newKey, this), true, timeoutMs_);
     while(!isClose_){
         //默认无事件将阻塞
         int timeout = timer_->getNextTick();
@@ -377,6 +374,7 @@ void Server::onWrite_newKey(){
         }
     }
     LOG_INFO("Server send rekeying message: %s", rekeymessage.get_str().c_str());
+    //timer_->adjust(listenfd_, timeoutMs_);
 }
 
 void Server::generate_new_gk(){
@@ -390,10 +388,6 @@ void Server::generate_new_gk(){
     //清理状态
     gmp_randclear(state);
     LOG_DEBUG("Server select a new group key: %s", gk_.get_str().c_str());
-}
-
-void Server::extentTime(int id){
-    if(timeoutMs_ > 0) timer_->adjust(id, timeoutMs_);
 }
 
 void Server::closeConn(Conn* client){
