@@ -1,7 +1,7 @@
 #ifndef _CLIENT_H_
 #define _CLIENT_H_
 
-#include "../PH_Cipher/PH_Cipher.h"
+//#include "../PH_Cipher/PH_Member.h"
 #include "../buffer/buffer.h"
 #include "../log/log.h"
 #include <arpa/inet.h>
