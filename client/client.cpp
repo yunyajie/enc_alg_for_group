@@ -15,27 +15,33 @@ Client::~Client(){
     }
 }
 
-void Client::start(){
+void Client::start(){//先尝试登录---登录失败时再注册
     if(isStop_) return;
     LOG_INFO("========== Client start ==========");
     std::pair<std::string, std::string> message;
-    // LOG_DEBUG("trying login!");
-    // writeBuf_.addMessage("login","yun-yun");
-    // writeFd();
-    // readFd(message);
-    // std::cout << message.first << " : " << message.second << std::endl;
-
-    LOG_DEBUG("trying register!");
     std::string user_info = user_name_ + "-" + passwd_;
+    LOG_DEBUG("trying login!");
     writeBuf_.addMessage("login", user_info);
     writeFd();
     readFd(message);
     std::cout << message.first << " : " << message.second << std::endl;
     if(message.second == "bad"){
+        LOG_DEBUG("trying register!");
+        writeBuf_.addMessage("register", user_info);
+        writeFd();
+        readFd(message);
+        std::cout << message.first << " : " << message.second << std::endl;
+        if(message.second == "bad"){
+            LOG_DEBUG("user %s already in system!", user_name_.c_str());
+            return;
+        }
+        isregistered_ = false;
+    }else if(message.second == "pwd"){
+        LOG_DEBUG("passwd error!");
         return;
     }
-
-    if(!isregistered_){
+    isregistered_ = true;
+    if(isregistered_){
         writeBuf_.addMessage("allocation", "client");//向密码系统注册
         writeFd();//向服务端发送
         readFd(message);
@@ -61,6 +67,7 @@ void Client::start(){
         writeBuf_.addMessage("mem_join", "client");
         writeFd();
         readFd(message);
+        std::cout << message.first << " : " << message.second << std::endl;
         if(message.second == "ok"){
             isactive_ = true;
             LOG_INFO("Client join the active group!");
@@ -72,7 +79,7 @@ void Client::start(){
         }
     }
     int err;
-    while(true){
+    while(!isStop_){
         readFd(message);
         if(message.first == "rekeying"){
             gk_cipher_ = mpz_class(message.second);
@@ -104,7 +111,7 @@ bool Client::init(){
         close(client_sock_);
         return false;
     }
-    Log::Instance()->init(0, "./", "_client.log", 1024); 
+    Log::Instance()->init(0, "./log", "_client.log", 1024); 
     LOG_INFO("========== Client init ==========");
     return true;
 }
@@ -113,7 +120,7 @@ bool Client::init(){
 int Client::readFd(std::pair<std::string, std::string>& message){
     int err;
     int ret = 0;
-    while((ret = readBuf_.getMessage(message) == -2)){
+    while((ret = readBuf_.getMessage(message)) == -2){
         int rett = readBuf_.ReadFd(client_sock_, &err);
         if(rett < 0){
             if(err & EINTR) continue;//接着尝试读
@@ -144,4 +151,8 @@ mpz_class Client::decrypt(const mpz_class& ciphertext){
     mpz_class message;
     mpz_powm(message.get_mpz_t(), ciphertext.get_mpz_t(), dec_key_.get_mpz_t(), mod_.get_mpz_t());
     return message;
+}
+
+mpz_class Client::get_gk(){
+    return gk_;
 }

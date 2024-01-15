@@ -14,10 +14,11 @@ class Client{
         Client(int server_port, const char* server_ip, const char* userName, const char* passwd);
         ~Client();
         void start();                                                   //启动
+        mpz_class decrypt(const mpz_class& ciphertext);
+        mpz_class get_gk();
+    private:
         int readFd(std::pair<std::string, std::string>& message);       //每次读一个消息
         int writeFd();                                                  //将写缓冲区的所有消息写入套接字
-        mpz_class decrypt(const mpz_class& ciphertext);
-    private:
         bool init();                        //初始化套接字和服务端地址
     private:
         bool isStop_;                       //是否连接成功可启动
@@ -28,15 +29,15 @@ class Client{
         Buffer readBuf_;                    //读缓冲区
         Buffer writeBuf_;                   //写缓冲区
 
-        bool isregistered_;                  //是否已注册
-        bool isactive_;                      //是否加入活跃组
+        bool isregistered_;                 //是否已在系统注册
+        bool isactive_;                     //是否加入活跃组
         mpz_class mod_;                     //模数
         mpz_class dec_key_;                 //解密密钥
         mpz_class gk_cipher_;               //接收到的密文
         mpz_class gk_;                      //组密钥
 
-        std::string user_name_;              //用户名
-        std::string passwd_;                 //登录密码
+        std::string user_name_;             //用户名
+        std::string passwd_;                //登录密码
 };
 
 
