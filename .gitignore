@@ -4,3 +4,4 @@ temp/
 main
 out
 *.log
+*.o
