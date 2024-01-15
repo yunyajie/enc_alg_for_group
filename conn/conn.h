@@ -29,7 +29,7 @@ class Conn{
     //private:
         void writeToBuff(std::string str);      //向写缓冲区写入
 
-        bool userVerify(const std::string& name, const std::string& pwd, bool isLogin);     //isLogin  注册是0 登录是1
+        bool userVerify(const std::string& name, const std::string& pwd, bool isLogin, int* err);     //isLogin  注册是0 登录是1
 
         //获取用户状态
         std::string getUserName();

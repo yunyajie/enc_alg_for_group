@@ -94,8 +94,8 @@ void Conn::writeToBuff(std::string str){
     writeBuff_.Append(str);
 }
 
-//用户验证后会同时设置其内部的状态 userDbid_
-bool Conn::userVerify(const std::string& name, const std::string& pwd, bool isLogin){
+//用户验证后会同时设置其内部的状态 userDbid_    设置 err -1 为数据库错误  -2 为用户密码错误 -3 为用户名已存在不可注册
+bool Conn::userVerify(const std::string& name, const std::string& pwd, bool isLogin, int* err){
     if(name == "" || pwd == "") return false;
     LOG_INFO("Verify name: %s : pwd %s", name.c_str(), pwd.c_str());
     MYSQL* sql;
@@ -114,30 +114,31 @@ bool Conn::userVerify(const std::string& name, const std::string& pwd, bool isLo
     if(mysql_query(sql, order)){
         mysql_free_result(res);
         LOG_ERROR("%s", mysql_error(sql));
+        *err = -1;
         return false;
     }
     res = mysql_store_result(sql);
     if(res == nullptr){
         mysql_free_result(res);
         LOG_ERROR("%s", mysql_error(sql));
+        *err = -1;
         return false;
     }
-    //int j = mysql_num_fields(res);
-    //fields = mysql_fetch_fields(res);
     while(MYSQL_ROW row = mysql_fetch_row(res)){
         LOG_DEBUG("MYSQL ROW: %s %s", row[0], row[1]);
         std::string password(row[1]);
-        //注册行为 且 用户名未被使用
-        if(isLogin){
+        if(isLogin){//登录行为
             if(pwd == password){
                 LOG_DEBUG("Registered user login!")
                 flag = true;
-            }else{
+            }else{//密码错误
                 flag = false;
+                *err = -2;
                 LOG_DEBUG("pwd error!");
             }
         }else{
             flag = false;
+            *err = -3;
             LOG_DEBUG("user used!");
         }
     }
@@ -167,8 +168,6 @@ bool Conn::userVerify(const std::string& name, const std::string& pwd, bool isLo
             return false;
         }
         res = mysql_store_result(sql);
-        // int j = mysql_num_fields(res);
-        // fields = mysql_fetch_fields(res);
         MYSQL_ROW row = mysql_fetch_row(res);
         LOG_DEBUG("MYSQL ROW: %s", row[0]);
         userDbid_ = atoi(row[0]);
@@ -179,7 +178,6 @@ bool Conn::userVerify(const std::string& name, const std::string& pwd, bool isLo
         islogin_ = false;
         LOG_DEBUG("UserVerify failure!");
     }
-    //SqlConnPool::Instance()->FreeConn(sql);
     return flag;
 }
 
