@@ -57,9 +57,9 @@ void Server::start(){
                 assert(clients_.count(fd) > 0);
                 if(clients_[fd].getph_member().isActive()){//如果该用户是活跃组的成员但是掉线了，将该用户移出活跃组
                     ph_cipher_->member_leave(clients_[fd].getph_member());
+                    //客户端断连，更新组密钥并向组内广播
+                    onWrite_newKey();
                 }
-                //客户端断连，更新组密钥并向组内广播
-                onWrite_newKey();
                 closeConn(&clients_[fd]);   //关闭连接
             }else if(events & EPOLLIN){
                 assert(clients_.count(fd) > 0);
@@ -216,10 +216,15 @@ void Server::onRead_userVerify(Conn* client, bool isLogin, const string& message
     int index = message.find('-');
     string name = message.substr(0, index);
     string pwd = message.substr(index + 1);
-    if(client->userVerify(name, pwd, isLogin)){//向客户端返回注册和登录结果-----仅仅注册和登录不分配密钥
+    int err = 0;
+    if(client->userVerify(name, pwd, isLogin, &err)){//向客户端返回注册和登录结果-----仅仅注册和登录不分配密钥
         client->addMessage("login", "ok");
     }else{
-        client->addMessage("login", "bad");
+        if(err == -2){
+            client->addMessage("login", "pwd");//密码错误
+        }else{
+            client->addMessage("login", "bad");//数据库错误
+        }
     }
     epoller_->modFd(client->getfd(), connEvent_ | EPOLLOUT);
 }
