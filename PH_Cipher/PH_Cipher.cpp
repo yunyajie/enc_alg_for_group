@@ -47,6 +47,7 @@ int PH_Cipher::member_join(PH_Member& joiner){      //注意这里的 joiner 的
     //更新主密钥信息参数和主密钥
     PH_Member&t = members[joiner.get_modulus()];
     this->m_key_info += t.get_enc_key() * t.get_x() * t.get_y();
+    this->m_key_info %= this->exp_mod_product;      //降低累加和的存储空间
     this->m_key = this->m_key_info % this->active_exp_mod_product;
     
     LOG_INFO("member join with mod %s", joiner.get_modulus().get_str().c_str());
@@ -72,6 +73,7 @@ int PH_Cipher::member_leave(PH_Member& leaver){     //注意这里的 leaver 的
     //更新主密钥信息参数和主密钥
     PH_Member&t = members[leaver.get_modulus()];
     this->m_key_info -= t.get_enc_key() * t.get_x() * t.get_y();
+    this->m_key_info = (this->m_key_info % this->exp_mod_product + this->exp_mod_product) % this->exp_mod_product;      //降低累加和的存储空间
     this->m_key = this->m_key_info % this->active_exp_mod_product;
 
     LOG_INFO("member leave with mod %s", leaver.get_modulus().get_str().c_str());
@@ -343,6 +345,7 @@ void PH_Cipher::master_key_init(){
         PH_Member& t = members[ele];
         this->m_key_info += t.get_enc_key() * t.get_x() * t.get_y();
     }
+    this->m_key_info %= this->exp_mod_product;      //降低累加和的存储空间
     this->m_key = this->m_key_info % this->active_exp_mod_product;
     LOG_INFO("master key init %s", this->m_key.get_str().c_str());
 }
