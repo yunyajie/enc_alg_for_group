@@ -8,9 +8,9 @@
 #include <unordered_set>
 #include <gmpxx.h>
 #include "PH_Member.h"
-#include "../log/log.h"
-#include "../pool/sqlconnpool.h"
-#include "../pool/sqlconnRAII.h"
+#include "../../log/log.h"
+#include "../../pool/sqlconnpool.h"
+#include "../../pool/sqlconnRAII.h"
 
 //自定义哈希函数对象
 struct mpz_class_hash{

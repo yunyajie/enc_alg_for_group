@@ -2,7 +2,7 @@
 #define _CONN_H_
 
 #include "../buffer/buffer.h"
-#include "../PH_Cipher/PH_Cipher.h"
+#include "../cipher/PH_Cipher/PH_Cipher.h"
 #include "../pool/sqlconnpool.h"
 #include "../pool/sqlconnRAII.h"
 #include "../log/log.h"
