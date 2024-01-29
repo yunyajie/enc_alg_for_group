@@ -4,7 +4,7 @@ target_client=testclient
 object_server=server/epoller.o server/main.o server/server.o conn/conn.o timer/heaptimer.o PH_Cipher/PH_Cipher.o PH_Cipher/PH_Member.o pool/sqlconnpool.o
 object_client=client/client.o client/main.o 
 object_common=buffer/buffer.o log/log.o
-LDFLAGS=-lgmp -lgmpxx
+LDFLAGS=-lgmp -lgmpxx -pthread
 
 all:$(target_server) $(target_client)
 
