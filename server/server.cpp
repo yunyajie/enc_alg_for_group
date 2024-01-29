@@ -15,7 +15,8 @@ Server::Server(int port,
         isClose_ = true;
     }
     //打开数据库连接池
-    SqlConnPool::Instance()->Init("localhost", sqlport, sqluser, sqlpwd, dbName, connPoolSize);
+    //SqlConnPool::Instance()->Init("localhost", sqlport, sqluser, sqlpwd, dbName, connPoolSize);
+    SqlConnPool::Instance()->Init("192.168.164.1", sqlport, sqluser, sqlpwd, dbName, connPoolSize);
     //初始化密码系统
     if(!ph_cipher_->sys_init_fromDb()){
         isClose_ = true;
