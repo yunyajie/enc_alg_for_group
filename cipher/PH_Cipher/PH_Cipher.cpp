@@ -1,93 +1,23 @@
 #include "PH_Cipher.h"
-
-//PH_Member 的实现
-PH_Member::PH_Member():isregistered(false), isactive(false){
-    //空构造
-}
-
-PH_Member::PH_Member(mpz_class enc_key, mpz_class modulus):enc_key(enc_key), modulus(modulus), isregistered(false), isactive(false){
-    //初始化解密密钥
-    mpz_invert(dec_key.get_mpz_t(), enc_key.get_mpz_t(), static_cast<mpz_class>(modulus - 1).get_mpz_t());
-}
-
-mpz_class PH_Member::decrypt(const mpz_class& ciphertext){
-    mpz_class message;
-    mpz_powm(message.get_mpz_t(), ciphertext.get_mpz_t(), dec_key.get_mpz_t(), modulus.get_mpz_t());
-    return message;
-}
-
-mpz_class PH_Member::get_enc_key() const{
-    return enc_key;
-}
-
-mpz_class PH_Member::get_dec_key() const{
-    return dec_key;
-}
-
-mpz_class PH_Member::get_modulus() const{
-    return modulus;
-}
-
-bool PH_Member::isRegistered() const{
-    return isregistered;
-}
-
-bool PH_Member::isActive() const{
-    return isactive;
-}
-
-void PH_Member::registered(){
-    isregistered = true;
-}
-
-void PH_Member::active(){
-    isactive = true;
-}
-
-void PH_Member::deactive(){
-    isactive = false;
-}
-
-void PH_Member::set_x(mpz_class& x){
-    this->x = x;
-}
-
-void PH_Member::set_y(mpz_class& y){
-    this->y = y;
-}
-
-mpz_class PH_Member::get_x(){
-    return this->x;
-}
-
-mpz_class PH_Member::get_y(){
-    return this->y;
-}
-
-PH_Member::~PH_Member(){}
-
-
-
-
-
 //PH_Cipher 的实现
 
 PH_Cipher::PH_Cipher(int m, int bit_length):m(m), bit_length(bit_length){
-    //系统初始化
+    //系统初始化-----测试用，未连接数据库
     //sys_init();
 }
 
 //新成员注册，系统分配可用密钥
 int PH_Cipher::allocation(PH_Member& new_register){
     if(available.empty()){//密钥分配完毕，系统需要扩展
-        //sys_extend();
+        //sys_extend();  //-----测试用，未连接数据库
         if(sys_extend_Db() == -1) return -1;
     }
-    //分配密钥
+    //从可用集合中分配密钥
     mpz_class t = *available.begin();
     available.erase(t);
     this->members[t].registered();
     new_register = this->members[t];
+    LOG_INFO("Cipher available keys size : %d", this->available.size());
     return 0;
 }
 
@@ -105,20 +35,21 @@ int PH_Cipher::member_join(PH_Member& joiner){      //注意这里的 joiner 的
         //在活跃组中，主密钥不需要更新，直接返回
         return 0;
     }
-    //更新成员状态
+    //更新成员状态为活跃
     joiner.active();
     members[joiner.get_modulus()].active();
     //加入活跃组
     active_members.insert(joiner.get_modulus());
-    //更新系统状态
+    //更新系统参数
+    this->active_exp_mod_product *= (joiner.get_modulus() - 1) / 2;
     this->active_mod_product *= joiner.get_modulus();
-    this->active_lcm *= (joiner.get_modulus() - 1) / 2;
 
-    //更新主加密密钥
+    //更新主密钥信息参数和主密钥
     PH_Member&t = members[joiner.get_modulus()];
-    this->m_key += t.get_enc_key() * t.get_x() * t.get_y();
-    this->m_key %= this->lcm;
-    if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
+    this->m_key_info += t.get_enc_key() * t.get_x() * t.get_y();
+    this->m_key_info %= this->exp_mod_product;      //降低累加和的存储空间
+    this->m_key = this->m_key_info % this->active_exp_mod_product;
+    
     LOG_INFO("member join with mod %s", joiner.get_modulus().get_str().c_str());
     LOG_INFO("master key refresh %s", this->m_key.get_str().c_str());
     return 0;
@@ -132,19 +63,18 @@ int PH_Cipher::member_leave(PH_Member& leaver){     //注意这里的 leaver 的
         return -1;
     }
     //成员在活跃组中，更新系统参数
-    active_mod_product /= leaver.get_modulus();
-    active_lcm /= (leaver.get_modulus() - 1) / 2;
+    this->active_exp_mod_product /= (leaver.get_modulus() - 1) / 2;
+    this->active_mod_product /= leaver.get_modulus();
     //从活跃组中删除
     active_members.erase(leaver.get_modulus());
-    //更新成员状态
+    //更新成员状态为非活跃
     leaver.deactive();
     members[leaver.get_modulus()].deactive();
-    //更新主加密密钥
+    //更新主密钥信息参数和主密钥
     PH_Member&t = members[leaver.get_modulus()];
-    this->m_key -= t.get_enc_key() * t.get_x() * t.get_y();
-    //mpz_mod(this->m_key.get_mpz_t(), this->m_key.get_mpz_t(), this->lcm.get_mpz_t());   //保证 m_key 是正数
-    this->m_key = (this->m_key % this->lcm + this->lcm) % this->lcm;  //保证 m_key 是正数
-    if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
+    this->m_key_info -= t.get_enc_key() * t.get_x() * t.get_y();
+    this->m_key_info = (this->m_key_info % this->exp_mod_product + this->exp_mod_product) % this->exp_mod_product;      //降低累加和的存储空间
+    this->m_key = this->m_key_info % this->active_exp_mod_product;
 
     LOG_INFO("member leave with mod %s", leaver.get_modulus().get_str().c_str());
     LOG_INFO("master key refresh %s", this->m_key.get_str().c_str());
@@ -161,30 +91,9 @@ int PH_Cipher::sys_size(){
 
 PH_Cipher::~PH_Cipher(){}
 
-//系统扩展为原来的两倍
-int PH_Cipher::sys_extend(){
-    LOG_INFO(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> PH_Cipher system extend <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
-    //std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>系统拓展<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
-    std::vector<PH_Member> newmembers = init_members(this->m);
-    //将新的密钥加入到系统的成员集合中以及可分配集合中
-    for(auto& ele : newmembers){
-        members.insert(std::make_pair(ele.get_modulus(), ele));
-        available.insert(ele.get_modulus());
-    }
-    //更新系统参数
-    init_lcm_modproduct();
-    init_xy();
-    //更新 m
-    this->m *= 2;
-    //初始化 m_key
-    master_key_init();
-    return 0;
-}
-
 //系统扩展为原来的两倍并更新数据库
 int PH_Cipher::sys_extend_Db(){
     LOG_INFO(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> PH_Cipher system extend with Database Update <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
-    //std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>系统拓展<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
     std::vector<PH_Member> newmembers = init_members(this->m);
     MYSQL* sql;
     SqlConnRAII(&sql, SqlConnPool::Instance());
@@ -201,42 +110,60 @@ int PH_Cipher::sys_extend_Db(){
         LOG_DEBUG("%s", order);
         std::cout << order << std::endl;
         if(mysql_query(sql, order)){//插入
+            LOG_ERROR("Insert into database ph_cipher.ph_keys failed!");
             mysql_free_result(res);
             return -1;
         }
     }
     //更新系统参数
-    init_lcm_modproduct();
+    init_modproduct();
     init_xy();
     //更新 m
     this->m *= 2;
-    //初始化 m_key
+    //初始化 m_key 和 m_key_info
     master_key_init();
     return 0;
+}
+
+//系统扩展为原来的两倍
+int PH_Cipher::sys_extend(){
+    LOG_INFO(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> PH_Cipher system extend <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+    std::vector<PH_Member> newmembers = init_members(this->m);
+    //将新的密钥加入到系统的成员集合中以及可分配集合中
+    for(auto& ele : newmembers){
+        members.insert(std::make_pair(ele.get_modulus(), ele));
+        available.insert(ele.get_modulus());
+    }
+    //更新系统参数
+    init_modproduct();
+    init_xy();
+    //更新 m
+    this->m *= 2;
+    //初始化 m_key 和 m_key_info
+    master_key_init();
+    return 0;
+}
+
+//初始化 mod_product 和 exp_mod_product
+void PH_Cipher::init_modproduct(){
+    this->mod_product = 1;
+    this->exp_mod_product = 2;
+    for(auto& ele : this->members){
+        mpz_class mod = ele.first;
+        this->mod_product *= mod;
+        this->exp_mod_product *= static_cast<mpz_class>((mod - 1) / 2);
+    }
 }
 
 //初始化 x 和 y
 void PH_Cipher::init_xy(){
     mpz_class tem_x, tem_y;
-    mpz_class lcm_half = this->lcm / 2;
     for(auto& ele : this->members){
-        tem_x = lcm_half / static_cast<mpz_class>((ele.first - 1) / 2);
+        tem_x = exp_mod_product / static_cast<mpz_class>((ele.first - 1) / 2);
         ele.second.set_x(tem_x);
         mpz_invert(tem_y.get_mpz_t(), tem_x.get_mpz_t(), static_cast<mpz_class>((ele.first - 1) / 2).get_mpz_t());
         ele.second.set_y(tem_y);
     }
-}
-
-//初始化 lcm 和 mod_product
-void PH_Cipher::init_lcm_modproduct(){
-    this->mod_product = 1;
-    this->lcm = 1;
-    for(auto& ele : this->members){
-        mpz_class mod = ele.first;
-        this->lcm *= static_cast<mpz_class>((mod - 1) / 2);
-        this->mod_product *= mod;
-    }
-    this->lcm *= 2;
 }
 
 //系统初始化
@@ -261,30 +188,29 @@ void PH_Cipher::sys_init(){
     //初始化活跃组集合
     this->active_members.clear();
     
-    //初始化 mod_product 和 lcm
-    init_lcm_modproduct();
+    //初始化 mod_product 和 exp_mod_product
+    init_modproduct();
 
     //初始化 x 和 y
     init_xy();
 
-    //初始化 active_mod_product active_lcm
-    this->active_mod_product = 1;  //未有成员注册并加入活跃组
-    this->active_lcm = 2;
+    //初始化 active_mod_product active_exp_mod_product  此时还没有任何一个成员加入活跃组
+    this->active_mod_product = 1;       //未有成员注册并加入活跃组
+    this->active_exp_mod_product = 2;   //最终分摊到每个成员是在指数上模除 2 * m_i，故默认模数为 2 的影子成员在活跃组中
 
-    //初始化 m_key
+    //初始化 m_key 和 m_key_info
     master_key_init();
 }
 
 bool PH_Cipher::sys_init_fromDb(){
     LOG_INFO("PH_Cipher system init from DataBase!");
-    std::cout << "PH_Cipher system init from DataBase!" << std::endl;
     //使用 bit_length 初始化 modulus_lower_bound 如果是从数据库载入，则取其中最大的模数为下界
     gmp_randstate_t state;
     gmp_randinit_default(state);    //初始化 GMP 伪随机数生成器状态
     mpz_urandomb(modulus_lower_bound.get_mpz_t(), state, bit_length);   //首先生成一个 bit_length 位的随机奇数
     mpz_setbit(modulus_lower_bound.get_mpz_t(), bit_length - 1); //确保是一个 bit_length 位长的数
     mpz_setbit(modulus_lower_bound.get_mpz_t(), 0); //确保是一个奇数
-    //初始化 m 个成员  或者从数据库直接初始化 members 成员，并修改其内部状态
+    //从数据库初始化 members 成员，并修改其内部状态
     this->members.clear();
     this->available.clear();
     this->active_members.clear();
@@ -298,12 +224,13 @@ bool PH_Cipher::sys_init_fromDb(){
     snprintf(order, 256, "SELECT enc_key, modulus, used FROM ph_keys");
     LOG_DEBUG("%s", order);
     if(mysql_query(sql, order) == 1){
-        std::cout << "查询失败！" << std::endl;
+        LOG_ERROR("Select from database ph_cipher.ph_keys failed!");
         mysql_free_result(res);
         return false;
     }
     res = mysql_store_result(sql);
     if(res == NULL){
+        LOG_ERROR("mysql_store_result failed!");
         mysql_free_result(res);
         return false;
     }
@@ -312,26 +239,27 @@ bool PH_Cipher::sys_init_fromDb(){
         mpz_class mod(row[1]);
         int used = atoi(row[2]);
         PH_Member t(enc_key, mod);
-        if(used == 0){
+        if(used == 0){//密钥未被使用则为可用状态
             available.insert(mod);
-        }else{
-            t.registered();//已被使用的-----即已在密码系统中注册过的
+        }else{//已被使用的-----即已在密码系统中注册过的
+            t.registered();
         }
         members.insert(std::pair<mpz_class, PH_Member>(mod, t));
         modulus_lower_bound = modulus_lower_bound > mod ? modulus_lower_bound : mod;
     }
     if(members.size() == 0){//数据库是空的----生成新的密钥并添加到数据库中
-        std::cout << "数据库是空的----生成新的密钥并添加到数据库中" << std::endl;
+        LOG_INFO("Database ph_cipher is empty, generating new keys for system and updating database!");
         auto new_members = init_members(m);
         for(auto ele : new_members){
             members.insert(std::pair<mpz_class, PH_Member>(ele.get_modulus(), ele));
-            //这里假设所有成员都可用
+            //新生成的密钥均为可用状态
             available.insert(ele.get_modulus());
             snprintf(order, 256, "INSERT INTO ph_keys (modulus, enc_key, dec_key, used) VALUES ('%s', '%s', '%s', %d)",
              ele.get_modulus().get_str().c_str(), ele.get_enc_key().get_str().c_str(), ele.get_dec_key().get_str().c_str(), 0);
             LOG_DEBUG("%s", order);
             std::cout << order << std::endl;
-            if(mysql_query(sql, order)){//插入
+            if(mysql_query(sql, order)){//插入新生成的密钥到数据库
+                LOG_ERROR("Insert into database ph_cipher.ph_keys failed!");
                 mysql_free_result(res);
                 return false;
             }
@@ -340,17 +268,17 @@ bool PH_Cipher::sys_init_fromDb(){
 
     this->m = members.size();
 
-    //初始化 mod_product 和 lcm
-    init_lcm_modproduct();
+    //初始化 mod_product 和 exp_mod_product
+    init_modproduct();
 
     //初始化 x 和 y
     init_xy();
 
-    //初始化 active_mod_product active_lcm
-    this->active_mod_product = 1;  //未有成员注册并加入活跃组
-    this->active_lcm = 1;
+    //初始化 active_mod_product active_exp_mod_product  此时还没有任何一个成员加入活跃组
+    this->active_mod_product = 1;       //未有成员注册并加入活跃组
+    this->active_exp_mod_product = 2;   //最终分摊到每个成员是在指数上模除 2 * m_i，故默认模数为 2 的影子成员在活跃组中
 
-    //初始化 m_key
+    //初始化 m_key 和 m_key_info
     master_key_init();
 
     LOG_INFO("Cipher system size : %d", this->members.size());
@@ -404,33 +332,20 @@ std::vector<PH_Member> PH_Cipher::init_members(int n){
     return new_members;
 }
 
-//系统初始化后初始化 m_key
+//系统初始化后初始化 m_key 和 m_key_info
 void PH_Cipher::master_key_init(){
-    //根据 active_members 中的活跃成员初始化 m_key
-    this->m_key = 0;
-    if(active_members.empty()) return;
+    //根据 active_members 中的活跃成员初始化 m_key 和 m_key_info
+    this->m_key_info = 0;
+    //模数为 2 假设为一个影子成员
+    mpz_class shadow_user_x = this->exp_mod_product / 2;
+    mpz_class shadow_user_y;
+    mpz_invert(shadow_user_y.get_mpz_t(), shadow_user_x.get_mpz_t(), static_cast<mpz_class>(2).get_mpz_t());
+    this->m_key_info = 1 * shadow_user_x * shadow_user_y;
     for(auto& ele : active_members){
         PH_Member& t = members[ele];
-        this->m_key += t.get_enc_key() * t.get_x() * t.get_y();
+        this->m_key_info += t.get_enc_key() * t.get_x() * t.get_y();
     }
-    this->m_key %= this->lcm;
-    if((this->m_key & 1) == 0) this->m_key = (this->m_key + this->lcm / 2) % this->lcm;
-    /*
-    e_i = 2 * r_i + 1 是一个奇数
-    设 mod_i = 2 * p_i + 1, 下面的代码保证 m_key mod 2 = 1，是一个奇数
-    则整理所有条件有： 
-    m_key mod 2 = 1                (1)  
-    m_key mod p_i = e_i mod p_i    (2)
-    于是有：
-    由 (2) m_key = k * p_i + e_i
-    由 m_key 和 e_i 都是奇数， k * p_i 是偶数，又有 p_i 是素数，则 k 是偶数，于是 (k * p_i) mod (2 * p_i) = 0
-    结论：
-    m_key mod (2 * p_i) 
-    = (k * p_i + e_i) mod (2 * p_i) 
-    = (k * p_i) mod (2 * p_i) + e_i mod (2 * p_i) 
-    = e_i mod (2 * p_i) 
-    = e_i
-    */
-    //需要满足 m_key % 2 == 1
+    this->m_key_info %= this->exp_mod_product;      //降低累加和的存储空间
+    this->m_key = this->m_key_info % this->active_exp_mod_product;
     LOG_INFO("master key init %s", this->m_key.get_str().c_str());
 }
