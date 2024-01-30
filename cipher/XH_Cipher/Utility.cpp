@@ -2,7 +2,7 @@
 
 int sha256encrypt(vector<string>& strs, mpz_class& result){
     if(strs.empty()) return -1;
-    unsigned char* md[SHA256_DIGEST_LENGTH]
+    unsigned char md[SHA256_DIGEST_LENGTH];
     SHA256_CTX ctx;
     SHA256_Init(&ctx);  //初始化指针
     for(string s : strs){
