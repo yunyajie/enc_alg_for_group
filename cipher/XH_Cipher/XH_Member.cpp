@@ -2,8 +2,13 @@
 XH_Member::XH_Member(mpz_class& modulus):_m(modulus){
 }
 
-mpz_class decrypt(const mpz_class& ciphertext){
-    
+mpz_class XH_Member::decrypt(const mpz_class& ciphertext){
+    mpz_class r = ciphertext % _m;   //先获取余数
+    std::vector<string> strs = {_m.get_str(), _server_r.get_str()};
+    mpz_class md;
+    sha256encrypt(strs, md);
+    mpz_class gk = r ^ md;
+    return gk;
 }
 
 mpz_class XH_Member::get_modulus() const{
@@ -44,6 +49,10 @@ void XH_Member::deactive(){
 
 void XH_Member::set_r(mpz_class& r){
     _r = r;
+}
+
+void XH_Member::set_server_r(mpz_class& server_r){
+    _server_r = server_r;
 }
 
 void XH_Member::set_x(mpz_class& x){

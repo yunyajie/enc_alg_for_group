@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <gmpxx.h>
+#include "../Cipher.h"
 #include "Utility.h"
 #include "XH_Member.h"
 #include "../../log/log.h"
@@ -25,13 +26,13 @@ struct mpz_class_hash{
     }
 };
 
-class XH_Cipher{
+class XH_Cipher : public Cipher{
     public:
         XH_Cipher(int m = 2, int bit_length = 257);
-        int allocation(XH_Member& new_register);        //新成员注册分配密钥
+        int allocation(Cipher_Member& new_register);        //新成员注册分配密钥
         mpz_class encrypt(const mpz_class& message);    //加密
-        int member_join(XH_Member& joiner);             //成员加入活跃组
-        int member_leave(XH_Member& leaver);            //成员离开活跃组
+        int member_join(Cipher_Member& joiner);             //成员加入活跃组
+        int member_leave(Cipher_Member& leaver);            //成员离开活跃组
         int active_size();                              //活跃组规模
         mpz_class get_r();                              //获取当前阶段的随机数
         int sys_size();                                 //系统规模

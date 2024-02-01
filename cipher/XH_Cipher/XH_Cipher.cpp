@@ -2,7 +2,7 @@
 XH_Cipher::XH_Cipher(int m, int bit_length):_m(m), _bit_length(bit_length){
 }
 
-int XH_Cipher::allocation(XH_Member& new_register){
+int XH_Cipher::allocation(Cipher_Member& new_register){
     if(_available.empty()){//密钥分配完毕，系统需要扩展
         //sys_extend();  //-----测试用，未连接数据库
         if(sys_extend_Db() == -1) return -1;
@@ -43,7 +43,7 @@ mpz_class XH_Cipher::encrypt(const mpz_class& message){//每次加密都需要�
     return cipher_text;
 }
 
-int XH_Cipher::member_join(XH_Member& joiner){
+int XH_Cipher::member_join(Cipher_Member& joiner){
     if(_members.find(joiner.get_modulus()) == _members.end()) return -1; //成员不在系统中
     //首先判断这个成员是否在活跃组中
     if(_active_members.find(joiner.get_modulus()) != _active_members.end()){
@@ -65,7 +65,7 @@ int XH_Cipher::member_join(XH_Member& joiner){
     return 0;
 }
 
-int XH_Cipher::member_leave(XH_Member& leaver){     //注意这里的 leaver 的 x 和 y 参数并没有更新
+int XH_Cipher::member_leave(Cipher_Member& leaver){     //注意这里的 leaver 的 x 和 y 参数并没有更新
     if(_members.find(leaver.get_modulus()) == _members.end()) return -1; //成员不在该系统中
     //首先判断这个成员是否在活跃组中
     if(_active_members.find(leaver.get_modulus()) == _active_members.end()){
