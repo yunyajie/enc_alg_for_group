@@ -56,11 +56,11 @@ void PH_Member::set_y(mpz_class& y){
     this->y = y;
 }
 
-mpz_class PH_Member::get_x(){
+mpz_class PH_Member::get_x() const{
     return this->x;
 }
 
-mpz_class PH_Member::get_y(){
+mpz_class PH_Member::get_y() const{
     return this->y;
 }
 

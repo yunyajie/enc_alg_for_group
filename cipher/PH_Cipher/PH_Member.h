@@ -12,8 +12,8 @@ class PH_Member{
         mpz_class get_modulus() const;
         void set_x(mpz_class& x);
         void set_y(mpz_class& y);
-        mpz_class get_x();
-        mpz_class get_y();
+        mpz_class get_x() const;
+        mpz_class get_y() const;
         bool isRegistered() const;
         bool isActive() const;
         void registered();
