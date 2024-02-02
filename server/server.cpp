@@ -257,7 +257,7 @@ bool Server::onRead_allocation(Conn* client){
     }
     if(isNew){//新注册的成员
         if(cipher_->allocation(client->get_cipher_member()) == -1) return false;
-        snprintf(order, 256, "SELECT key_id FROM ph_keys WHERE modulus=%s", client->get_cipher_member().get_modulus().get_str().c_str());
+        snprintf(order, 256, "SELECT key_id FROM ph_keys WHERE modulus='%s'", client->get_cipher_member().get_modulus().get_str().c_str());
         LOG_DEBUG("%s", order);
         if(mysql_query(sql, order)){
             LOG_ERROR("%s", mysql_error(sql));
