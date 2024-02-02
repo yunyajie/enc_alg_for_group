@@ -3,7 +3,7 @@ using namespace std;
 
 Server::Server(int port, 
     int sqlport, const char* sqluser, const char* sqlpwd, const char* dbName, int connPoolSize,
-    int keylevel, int timeoutMs, bool openLog, int logLevel):port_(port), key_leavel_(keylevel), timeoutMs_(timeoutMs), isClose_(false), epoller_(new Epoller()), ph_cipher_(new PH_Cipher()), timer_(new HeapTimer()){
+    int keylevel, int timeoutMs, bool openLog, int logLevel):port_(port), key_leavel_(keylevel), timeoutMs_(timeoutMs), isClose_(false), epoller_(new Epoller()), cipher_(new PH_Cipher()), timer_(new HeapTimer()){
     Conn::userCount = 0;
     Conn::isET = true;
     connEvent_ =  EPOLLONESHOT | EPOLLRDHUP | EPOLLET;
@@ -18,7 +18,7 @@ Server::Server(int port,
     //SqlConnPool::Instance()->Init("localhost", sqlport, sqluser, sqlpwd, dbName, connPoolSize);
     SqlConnPool::Instance()->Init("192.168.164.1", sqlport, sqluser, sqlpwd, dbName, connPoolSize);
     //初始化密码系统
-    if(!ph_cipher_->sys_init_fromDb()){
+    if(!cipher_->sys_init_fromDb()){
         isClose_ = true;
         LOG_ERROR(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Cipher System init error! <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
     }
@@ -56,8 +56,8 @@ void Server::start(){
                 dealListen();   //处理监听操作----接受新的连接
             }else if(events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)){
                 assert(clients_.count(fd) > 0);
-                if(clients_[fd].getph_member().isActive()){//如果该用户是活跃组的成员但是掉线了，将该用户移出活跃组
-                    ph_cipher_->member_leave(clients_[fd].getph_member());
+                if(clients_[fd].get_cipher_member().isActive()){//如果该用户是活跃组的成员但是掉线了，将该用户移出活跃组
+                    cipher_->member_leave(clients_[fd].get_cipher_member());
                     //客户端断连，更新组密钥并向组内广播
                     onWrite_newKey();
                 }
@@ -256,8 +256,8 @@ bool Server::onRead_allocation(Conn* client){
         if(registered == 0) isNew = true;
     }
     if(isNew){//新注册的成员
-        if(ph_cipher_->allocation(client->getph_member()) == -1) return false;
-        snprintf(order, 256, "SELECT key_id FROM ph_keys WHERE modulus=%s", client->getph_member().get_modulus().get_str().c_str());
+        if(cipher_->allocation(client->get_cipher_member()) == -1) return false;
+        snprintf(order, 256, "SELECT key_id FROM ph_keys WHERE modulus=%s", client->get_cipher_member().get_modulus().get_str().c_str());
         LOG_DEBUG("%s", order);
         if(mysql_query(sql, order)){
             LOG_ERROR("%s", mysql_error(sql));
@@ -305,16 +305,16 @@ bool Server::onRead_allocation(Conn* client){
         if(row){
             mpz_class enc_key(row[0]);
             mpz_class mod(row[1]);
-            client->getph_member() = PH_Member(enc_key, mod);
-            client->getph_member().registered();
+            client->get_cipher_member() = PH_Member(enc_key, mod);
+            client->get_cipher_member().registered();
         }else{
             return false;
         }
     }
     //将解密密钥写入临时缓冲区
     client->addMessage("allocation", "ok");
-    client->addMessage("dec_key", client->getph_member().get_dec_key().get_str());
-    client->addMessage("mod", client->getph_member().get_modulus().get_str());
+    client->addMessage("dec_key", dynamic_cast<PH_Member&>(client->get_cipher_member()).get_dec_key().get_str());//这个是 PH_Cipher 独有的
+    client->addMessage("mod", client->get_cipher_member().get_modulus().get_str());
     epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);
     LOG_INFO("Client[%d]: %s allocation!", client->getfd(), client->getUserName().c_str());
     return true;
@@ -323,7 +323,7 @@ bool Server::onRead_allocation(Conn* client){
 int Server::onRead_member_join(Conn* client){//成员加入活跃组
     assert(client);
     int ret = 0;
-    ret = ph_cipher_->member_join(client->getph_member());
+    ret = cipher_->member_join(client->get_cipher_member());
     //向客户端会送加入成功或失败的消息
     if(ret == 0){//成功
         client->addMessage("mem_join", "ok");
@@ -338,7 +338,7 @@ int Server::onRead_member_join(Conn* client){//成员加入活跃组
 
 int Server::onRead_member_leave(Conn* client){//成员离开活跃组
     assert(client);
-    int ret = ph_cipher_->member_leave(client->getph_member());
+    int ret = cipher_->member_leave(client->get_cipher_member());
     //向客户端会送加入成功或失败的消息
     if(ret == 0){
         client->addMessage("mem_leave", "ok");
@@ -372,9 +372,9 @@ void Server::dealWrite(Conn* client){
 
 void Server::onWrite_newKey(){
     generate_new_gk();
-    mpz_class rekeymessage = ph_cipher_->encrypt(gk_);
+    mpz_class rekeymessage = cipher_->encrypt(gk_);
     for(auto &ele : clients_){
-        if(ele.second.getph_member().isActive()){
+        if(ele.second.get_cipher_member().isActive()){
             ele.second.addMessage("rekeying", rekeymessage.get_str());
             epoller_->modFd(ele.second.getfd(), EPOLLOUT | connEvent_);
         }
