@@ -13,7 +13,7 @@ class Cipher{
         virtual int active_size() = 0;                              //活跃组规模
         virtual int sys_size() = 0;                                 //系统规模
         virtual bool sys_init_fromDb() = 0;                         //从数据库初始化    在 server 将连接池启动之后再初始化
-        virtual ~Cipher(){};
+        virtual ~Cipher() = default;
 };
 
 #endif

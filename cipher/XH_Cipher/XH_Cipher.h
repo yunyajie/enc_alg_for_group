@@ -37,7 +37,7 @@ class XH_Cipher : public Cipher{
         mpz_class get_r();                              //获取当前阶段的随机数
         int sys_size();                                 //系统规模
         bool sys_init_fromDb();                         //从数据库初始化    在 server 将连接池启动之后再初始化
-        ~XH_Cipher();
+        ~XH_Cipher() = default;
         
     private:
         int sys_extend_Db();                //备用密钥分配完毕，系统需要扩展，计划扩展为原来规模的2倍，并将新的密钥加入到数据库中

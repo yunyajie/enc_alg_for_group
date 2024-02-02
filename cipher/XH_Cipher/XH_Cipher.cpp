@@ -86,8 +86,6 @@ int XH_Cipher::member_leave(Cipher_Member& leaver){     //注意这里的 leaver
     return 0;
 }
 
-XH_Cipher::~XH_Cipher(){}
-
 int XH_Cipher::active_size(){
     return _active_members.size();
 }

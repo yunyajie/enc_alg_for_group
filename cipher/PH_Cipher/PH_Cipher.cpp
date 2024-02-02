@@ -7,7 +7,7 @@ PH_Cipher::PH_Cipher(int m, int bit_length):m(m), bit_length(bit_length){
 }
 
 //新成员注册，系统分配可用密钥
-int PH_Cipher::allocation(PH_Member& new_register){
+int PH_Cipher::allocation(Cipher_Member& new_register){
     if(available.empty()){//密钥分配完毕，系统需要扩展
         //sys_extend();  //-----测试用，未连接数据库
         if(sys_extend_Db() == -1) return -1;
@@ -16,7 +16,10 @@ int PH_Cipher::allocation(PH_Member& new_register){
     mpz_class t = *available.begin();
     available.erase(t);
     this->members[t].registered();
-    new_register = this->members[t];
+    dynamic_cast<PH_Member&>(new_register) = this->members[t]; ////问题出在这里
+    // std::cout << "测试一下：" << std::endl;
+    // std::cout << "new_mod = " << new_register.get_modulus().get_str() << std::endl;
+    // std::cout << "mod = " << this->members[t].get_modulus().get_str() << std::endl;
     LOG_INFO("Cipher available keys size : %d", this->available.size());
     return 0;
 }
@@ -28,7 +31,7 @@ mpz_class PH_Cipher::encrypt(const mpz_class& message){
     return cipher_text;
 }
 
-int PH_Cipher::member_join(PH_Member& joiner){      //注意这里的 joiner 的 x 和 y 参数并没有更新
+int PH_Cipher::member_join(Cipher_Member& joiner){      //注意这里的 joiner 的 x 和 y 参数并没有更新
     if(members.find(joiner.get_modulus()) == members.end()) return -1; //成员不在系统中
     //首先判断这个成员是否在活跃组中
     if(active_members.find(joiner.get_modulus()) != active_members.end()){
@@ -55,7 +58,7 @@ int PH_Cipher::member_join(PH_Member& joiner){      //注意这里的 joiner 的
     return 0;
 }
 
-int PH_Cipher::member_leave(PH_Member& leaver){     //注意这里的 leaver 的 x 和 y 参数并没有更新
+int PH_Cipher::member_leave(Cipher_Member& leaver){     //注意这里的 leaver 的 x 和 y 参数并没有更新
     if(members.find(leaver.get_modulus()) == members.end()) return -1; //成员不在该系统中
     //首先判断这个成员是否在活跃组中
     if(active_members.find(leaver.get_modulus()) == active_members.end()){
@@ -88,8 +91,6 @@ int PH_Cipher::active_size(){
 int PH_Cipher::sys_size(){
     return members.size();
 }
-
-PH_Cipher::~PH_Cipher(){}
 
 //系统扩展为原来的两倍并更新数据库
 int PH_Cipher::sys_extend_Db(){

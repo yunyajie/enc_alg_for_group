@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <gmpxx.h>
+#include "../Cipher.h"
 #include "PH_Member.h"
 #include "../../log/log.h"
 #include "../../pool/sqlconnpool.h"
@@ -24,18 +25,18 @@ struct mpz_class_hash{
     }
 };
 
-class PH_Cipher{
+class PH_Cipher : public Cipher{
     public:
         PH_Cipher(int m = 2, int bit_length = 32);
-        int allocation(PH_Member& new_register);        //新成员注册分配密钥
-        mpz_class encrypt(const mpz_class& message);    //加密
-        int member_join(PH_Member& joiner);             //成员加入活跃组
-        int member_leave(PH_Member& leaver);            //成员离开活跃组
-        int active_size();                              //活跃组规模
-        int sys_size();                                 //系统规模
+        int allocation(Cipher_Member& new_register);        //新成员注册分配密钥
+        mpz_class encrypt(const mpz_class& message);        //加密
+        int member_join(Cipher_Member& joiner);             //成员加入活跃组
+        int member_leave(Cipher_Member& leaver);            //成员离开活跃组
+        int active_size();                                  //活跃组规模
+        int sys_size();                                     //系统规模
 
-        bool sys_init_fromDb();                         //从数据库初始化    在 server 将连接池启动之后再初始化
-        ~PH_Cipher();
+        bool sys_init_fromDb();                             //从数据库初始化    在 server 将连接池启动之后再初始化
+        ~PH_Cipher() = default;
         
     private:
         int sys_extend();                   //备用密钥分配完毕，系统需要扩展，计划扩展为原来规模的2倍----测试用，未连接数据库

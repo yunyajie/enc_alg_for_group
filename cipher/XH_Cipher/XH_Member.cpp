@@ -1,5 +1,9 @@
 #include "XH_Member.h"
-XH_Member::XH_Member(mpz_class& modulus):_m(modulus){
+
+XH_Member::XH_Member():_isactive(false), _isregistered(false){
+}
+
+XH_Member::XH_Member(mpz_class& modulus):_m(modulus), _isactive(false), _isregistered(false){
 }
 
 mpz_class XH_Member::decrypt(const mpz_class& ciphertext){
@@ -62,5 +66,3 @@ void XH_Member::set_x(mpz_class& x){
 void XH_Member::set_y(mpz_class& y){
     _y = y;
 }
-
-XH_Member::~XH_Member(){}

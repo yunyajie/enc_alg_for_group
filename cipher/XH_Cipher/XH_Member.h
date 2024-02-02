@@ -6,8 +6,9 @@
 
 class XH_Member : public Cipher_Member{
     public:
+        XH_Member();
         XH_Member(mpz_class& modulus);
-        ~XH_Member();
+        ~XH_Member() = default;
         mpz_class decrypt(const mpz_class& ciphertext);    //解密
         mpz_class get_modulus() const;
         mpz_class get_x() const;

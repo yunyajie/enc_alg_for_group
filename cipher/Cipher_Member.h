@@ -2,6 +2,11 @@
 #define _CIPHER_MEMBER_H_
 #include<gmpxx.h>
 
+enum class Cipher_Method{
+    PH_CIPHER,
+    XH_CIPHER
+};
+
 class Cipher_Member{
     public:
         Cipher_Member(){};
@@ -16,7 +21,7 @@ class Cipher_Member{
         virtual void registered() = 0;
         virtual void active() = 0;
         virtual void deactive() = 0;
-        virtual ~Cipher_Member(){};
+        virtual ~Cipher_Member() = default;
 };
 
 #endif
