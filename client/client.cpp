@@ -49,10 +49,6 @@ void Client::start(){//先尝试登录---登录失败时再注册
         std::cout << message.first << " : " << message.second << std::endl;
         if(message.second == "ok"){
             readFd(message);
-            dec_key_ = mpz_class(message.second);
-            LOG_DEBUG("dec_key = %s", dec_key_.get_str().c_str());
-            std::cout << "dec_key = " << dec_key_.get_str() << std::endl;
-            readFd(message);
             mod_ = mpz_class(message.second);
             LOG_DEBUG("mod = %s", mod_.get_str().c_str());
             std::cout << "mod = " << mod_.get_str() << std::endl;
@@ -83,14 +79,22 @@ void Client::start(){//先尝试登录---登录失败时再注册
         readFd(message);
         if(message.first == "rekeying"){
             gk_cipher_ = mpz_class(message.second);
-            gk_ = decrypt(gk_cipher_);
             LOG_DEBUG("Receive from Server rekeying message: %s", gk_cipher_.get_str().c_str());
             std::cout << "Receive from Server rekeying message: " << gk_cipher_.get_str() << std::endl;
-            LOG_DEBUG("new group key: %s", gk_.get_str().c_str());
-            std::cout << "new group key: " << gk_.get_str() << std::endl;
         }else{
             LOG_DEBUG("Receive from Server unexpect message: %s---%s", message.first, message.second);
         }
+        readFd(message);
+        if(message.first == "randomNum"){
+            r_ = mpz_class(message.second);
+            LOG_DEBUG("Receive from Server RandomNum: %s", r_.get_str().c_str());
+            std::cout << "Receive from Server RandomNum: " << r_.get_str() << std::endl;
+        }else{
+            LOG_DEBUG("Receive from Server unexpect message: %s---%s", message.first, message.second);
+        }
+        gk_ = decrypt();
+        LOG_DEBUG("new group key: %s", gk_.get_str().c_str());
+        std::cout << "new group key: " << gk_.get_str() << std::endl;
     }
 }
 
@@ -147,10 +151,15 @@ int Client::writeFd(){
     return 0;
 }
 
-mpz_class Client::decrypt(const mpz_class& ciphertext){
-    mpz_class message;
-    mpz_powm(message.get_mpz_t(), ciphertext.get_mpz_t(), dec_key_.get_mpz_t(), mod_.get_mpz_t());
-    return message;
+mpz_class Client::decrypt(){
+    mpz_class md;
+    //先获取余数
+    gk_ = gk_cipher_ % mod_;
+    //获取哈希值
+    std::vector<string> strs = {mod_.get_str(), r_.get_str()};
+    sha256encrypt(strs, md);
+    gk_ ^= md;
+    return gk_;
 }
 
 mpz_class Client::get_gk(){

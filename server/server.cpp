@@ -3,7 +3,7 @@ using namespace std;
 
 Server::Server(int port, 
     int sqlport, const char* sqluser, const char* sqlpwd, const char* dbName, int connPoolSize,
-    int keylevel, int timeoutMs, bool openLog, int logLevel):port_(port), key_leavel_(keylevel), timeoutMs_(timeoutMs), isClose_(false), epoller_(new Epoller()), cipher_(new PH_Cipher()), timer_(new HeapTimer()){
+    int keylevel, int timeoutMs, bool openLog, int logLevel):port_(port), key_leavel_(keylevel), timeoutMs_(timeoutMs), isClose_(false), epoller_(new Epoller()), cipher_(new XH_Cipher()), timer_(new HeapTimer()){
     Conn::userCount = 0;
     Conn::isET = true;
     connEvent_ =  EPOLLONESHOT | EPOLLRDHUP | EPOLLET;
@@ -257,7 +257,7 @@ bool Server::onRead_allocation(Conn* client){
     }
     if(isNew){//新注册的成员
         if(cipher_->allocation(client->get_cipher_member()) == -1) return false;
-        snprintf(order, 256, "SELECT key_id FROM ph_keys WHERE modulus=%s", client->get_cipher_member().get_modulus().get_str().c_str());
+        snprintf(order, 256, "SELECT key_id FROM xh_keys WHERE modulus='%s'", client->get_cipher_member().get_modulus().get_str().c_str());
         LOG_DEBUG("%s", order);
         if(mysql_query(sql, order)){
             LOG_ERROR("%s", mysql_error(sql));
@@ -282,14 +282,14 @@ bool Server::onRead_allocation(Conn* client){
             LOG_ERROR("%s", mysql_error(sql));
             return false;
         }
-        snprintf(order, 256, "UPDATE ph_keys SET used=%d WHERE key_id=%d", 1, k_id);//设置密钥为占用状态
+        snprintf(order, 256, "UPDATE xh_keys SET used=%d WHERE key_id=%d", 1, k_id);//设置密钥为占用状态
         LOG_DEBUG("%s", order);
         if(mysql_query(sql, order)){
             LOG_ERROR("%s", mysql_error(sql));
             return false;
         }
     }else{//已分配密钥的成员
-        snprintf(order, 256, "SELECT enc_key, modulus FROM all_info WHERE id=%d", client->getUserDbid());
+        snprintf(order, 256, "SELECT modulus FROM all_info WHERE id=%d", client->getUserDbid());
         LOG_DEBUG("%s", order);
         if(mysql_query(sql, order)){
             LOG_ERROR("%s", mysql_error(sql));
@@ -303,9 +303,8 @@ bool Server::onRead_allocation(Conn* client){
         }
         row = mysql_fetch_row(res);
         if(row){
-            mpz_class enc_key(row[0]);
-            mpz_class mod(row[1]);
-            client->get_cipher_member() = PH_Member(enc_key, mod);
+            mpz_class mod(row[0]);
+            client->get_cipher_member() = XH_Member(mod);
             client->get_cipher_member().registered();
         }else{
             return false;
@@ -313,7 +312,6 @@ bool Server::onRead_allocation(Conn* client){
     }
     //将解密密钥写入临时缓冲区
     client->addMessage("allocation", "ok");
-    client->addMessage("dec_key", dynamic_cast<PH_Member&>(client->get_cipher_member()).get_dec_key().get_str());//这个是 PH_Cipher 独有的
     client->addMessage("mod", client->get_cipher_member().get_modulus().get_str());
     epoller_->modFd(client->getfd(), EPOLLOUT | connEvent_);
     LOG_INFO("Client[%d]: %s allocation!", client->getfd(), client->getUserName().c_str());
@@ -376,10 +374,12 @@ void Server::onWrite_newKey(){
     for(auto &ele : clients_){
         if(ele.second.get_cipher_member().isActive()){
             ele.second.addMessage("rekeying", rekeymessage.get_str());
+            ele.second.addMessage("randomNum", (dynamic_cast<XH_Cipher*>(cipher_.get()))->get_r().get_str());
             epoller_->modFd(ele.second.getfd(), EPOLLOUT | connEvent_);
         }
     }
     LOG_INFO("Server send rekeying message: %s", rekeymessage.get_str().c_str());
+    LOG_INFO("Server send randomNum: %s", (dynamic_cast<XH_Cipher*>(cipher_.get()))->get_r().get_str().c_str());
     //timer_->adjust(listenfd_, timeoutMs_);
 }
 

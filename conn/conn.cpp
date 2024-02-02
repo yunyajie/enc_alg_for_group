@@ -45,7 +45,7 @@ void Conn::closeFd(){
     fd_ = -1;
 }
 
-PH_Member& Conn::get_cipher_member(){
+XH_Member& Conn::get_cipher_member(){
     return cipher_member_;
 }
 

@@ -11,7 +11,7 @@ int XH_Cipher::allocation(Cipher_Member& new_register){
     mpz_class t = *_available.begin();
     _available.erase(t);
     _members[t].registered();
-    new_register = _members[t];
+    dynamic_cast<XH_Member&>(new_register) = _members[t];
     LOG_INFO("Cipher available keys size : %d", _available.size());
     return 0;
 }
@@ -177,12 +177,27 @@ bool XH_Cipher::sys_init_fromDb(){
 }
 
 int XH_Cipher::sys_extend_Db(){
-    LOG_INFO(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> XH_Cipher system extend <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+    LOG_INFO(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> XH_Cipher system extend with Database Update <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
     std::vector<XH_Member> newmembers = init_members(_m);
+    MYSQL* sql;
+    SqlConnRAII(&sql, SqlConnPool::Instance());
+    assert(sql);
+    char order[256] = {0};
+    MYSQL_FIELD* fields = nullptr;
+    MYSQL_RES* res = nullptr;
     //将新的密钥加入到系统的成员集合中以及可分配集合中
     for(auto& ele : newmembers){
         _members.insert(std::make_pair(ele.get_modulus(), ele));
         _available.insert(ele.get_modulus());
+        snprintf(order, 256, "INSERT INTO xh_keys (modulus, used) VALUES ('%s', %d)",
+             ele.get_modulus().get_str().c_str(), 0);
+        LOG_DEBUG("%s", order);
+        std::cout << order << std::endl;
+        if(mysql_query(sql, order)){//插入
+            LOG_ERROR("Insert into database xh_cipher.xh_keys failed!");
+            mysql_free_result(res);
+            return -1;
+        }
     }
     //更新系统参数
     init_modproduct();
