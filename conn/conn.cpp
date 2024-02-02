@@ -45,8 +45,8 @@ void Conn::closeFd(){
     fd_ = -1;
 }
 
-PH_Member& Conn::getph_member(){
-    return ph_member_;
+PH_Member& Conn::get_cipher_member(){
+    return cipher_member_;
 }
 
 ssize_t Conn::read(int* saveError){//从文件描述符读取数据，直到把所有数据读完
