@@ -15,37 +15,39 @@ Client::~Client(){
     }
 }
 
-void Client::start(){
+void Client::start(){//先尝试登录---登录失败时再注册
     if(isStop_) return;
     LOG_INFO("========== Client start ==========");
     std::pair<std::string, std::string> message;
-    // LOG_DEBUG("trying login!");
-    // writeBuf_.addMessage("login","yun-yun");
-    // writeFd();
-    // readFd(message);
-    // std::cout << message.first << " : " << message.second << std::endl;
-
-    LOG_DEBUG("trying register!");
     std::string user_info = user_name_ + "-" + passwd_;
+    LOG_DEBUG("trying login!");
     writeBuf_.addMessage("login", user_info);
     writeFd();
     readFd(message);
     std::cout << message.first << " : " << message.second << std::endl;
     if(message.second == "bad"){
+        LOG_DEBUG("trying register!");
+        writeBuf_.addMessage("register", user_info);
+        writeFd();
+        readFd(message);
+        std::cout << message.first << " : " << message.second << std::endl;
+        if(message.second == "bad"){
+            LOG_DEBUG("user %s already in system!", user_name_.c_str());
+            return;
+        }
+        isregistered_ = false;
+    }else if(message.second == "pwd"){
+        LOG_DEBUG("passwd error!");
         return;
     }
-
-    if(!isregistered_){
+    isregistered_ = true;
+    if(isregistered_){
         writeBuf_.addMessage("allocation", "client");//向密码系统注册
         writeFd();//向服务端发送
         readFd(message);
         LOG_DEBUG("<%s:%s>", message.first.c_str(), message.second.c_str());
         std::cout << message.first << " : " << message.second << std::endl;
         if(message.second == "ok"){
-            readFd(message);
-            dec_key_ = mpz_class(message.second);
-            LOG_DEBUG("dec_key = %s", dec_key_.get_str().c_str());
-            std::cout << "dec_key = " << dec_key_.get_str() << std::endl;
             readFd(message);
             mod_ = mpz_class(message.second);
             LOG_DEBUG("mod = %s", mod_.get_str().c_str());
@@ -61,6 +63,7 @@ void Client::start(){
         writeBuf_.addMessage("mem_join", "client");
         writeFd();
         readFd(message);
+        std::cout << message.first << " : " << message.second << std::endl;
         if(message.second == "ok"){
             isactive_ = true;
             LOG_INFO("Client join the active group!");
@@ -72,18 +75,26 @@ void Client::start(){
         }
     }
     int err;
-    while(true){
+    while(!isStop_){
         readFd(message);
         if(message.first == "rekeying"){
             gk_cipher_ = mpz_class(message.second);
-            gk_ = decrypt(gk_cipher_);
             LOG_DEBUG("Receive from Server rekeying message: %s", gk_cipher_.get_str().c_str());
             std::cout << "Receive from Server rekeying message: " << gk_cipher_.get_str() << std::endl;
-            LOG_DEBUG("new group key: %s", gk_.get_str().c_str());
-            std::cout << "new group key: " << gk_.get_str() << std::endl;
         }else{
             LOG_DEBUG("Receive from Server unexpect message: %s---%s", message.first, message.second);
         }
+        readFd(message);
+        if(message.first == "randomNum"){
+            r_ = mpz_class(message.second);
+            LOG_DEBUG("Receive from Server RandomNum: %s", r_.get_str().c_str());
+            std::cout << "Receive from Server RandomNum: " << r_.get_str() << std::endl;
+        }else{
+            LOG_DEBUG("Receive from Server unexpect message: %s---%s", message.first, message.second);
+        }
+        gk_ = decrypt();
+        LOG_DEBUG("new group key: %s", gk_.get_str().c_str());
+        std::cout << "new group key: " << gk_.get_str() << std::endl;
     }
 }
 
@@ -104,7 +115,7 @@ bool Client::init(){
         close(client_sock_);
         return false;
     }
-    Log::Instance()->init(0, "./", "_client.log", 1024); 
+    Log::Instance()->init(0, "./log", "_client.log", 1024); 
     LOG_INFO("========== Client init ==========");
     return true;
 }
@@ -113,7 +124,7 @@ bool Client::init(){
 int Client::readFd(std::pair<std::string, std::string>& message){
     int err;
     int ret = 0;
-    while((ret = readBuf_.getMessage(message) == -2)){
+    while((ret = readBuf_.getMessage(message)) == -2){
         int rett = readBuf_.ReadFd(client_sock_, &err);
         if(rett < 0){
             if(err & EINTR) continue;//接着尝试读
@@ -140,8 +151,17 @@ int Client::writeFd(){
     return 0;
 }
 
-mpz_class Client::decrypt(const mpz_class& ciphertext){
-    mpz_class message;
-    mpz_powm(message.get_mpz_t(), ciphertext.get_mpz_t(), dec_key_.get_mpz_t(), mod_.get_mpz_t());
-    return message;
+mpz_class Client::decrypt(){
+    mpz_class md;
+    //先获取余数
+    gk_ = gk_cipher_ % mod_;
+    //获取哈希值
+    std::vector<string> strs = {mod_.get_str(), r_.get_str()};
+    sha256encrypt(strs, md);
+    gk_ ^= md;
+    return gk_;
+}
+
+mpz_class Client::get_gk(){
+    return gk_;
 }

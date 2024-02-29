@@ -2,7 +2,8 @@
 #define _SERVER_H_
 #include "epoller.h"
 #include "../log/log.h"
-#include "../PH_Cipher/PH_Cipher.h"
+#include "../cipher/Cipher_Member.h"
+#include "../cipher/XH_Cipher/XH_Cipher.h"
 #include "../conn/conn.h"
 #include "../pool/sqlconnpool.h"
 #include "../pool/sqlconnRAII.h"
@@ -42,7 +43,7 @@ class Server{
         int listenfd_;                          //监听套接字
         int timeoutMs_;                         //超时事件 毫秒Ms
         std::unique_ptr<Epoller> epoller_;      //epoll 对象
-        std::unique_ptr<PH_Cipher> ph_cipher_;  //加密算法对象
+        std::unique_ptr<Cipher> cipher_;     //加密算法对象
         std::unique_ptr<HeapTimer> timer_;      //定时器
         bool isClose_;                          //是否关闭
         //uint32_t listenEvent_;                //监听的文件描述符的事件
